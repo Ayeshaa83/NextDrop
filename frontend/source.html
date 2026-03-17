@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Refined Artist Analytics Dashboard - Taylor Swift</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#8b5cf6",
+                        "secondary": "#06b6d4",
+                        "accent-pink": "#ec4899",
+                        "background-dark": "#0a0a12",
+                    },
+                    fontFamily: {
+                        "sans": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        @layer components {
+            .glass-panel {
+                background: rgba(20, 20, 40, 0.6);
+                backdrop-filter: blur(16px);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-top: 1px solid rgba(139, 92, 246, 0.3);
+            }
+            .glass-card {
+                background: rgba(20, 20, 40, 0.6);
+                backdrop-filter: blur(12px);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-top: 1px solid rgba(255, 255, 255, 0.15);
+            }
+            .neon-glow-purple {
+                box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+            }
+            .neon-text-cyan {
+                text-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+            }
+            .chart-glow {
+                filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.8));
+            }
+            .nav-indicator-glow {
+                box-shadow: 0 0 10px rgba(6, 182, 212, 0.8);
+            }
+        }
+    </style>
+</head>
+<body class="bg-[#0a0a12] text-slate-100 font-sans selection:bg-primary/30 antialiased">
+<div class="flex h-screen overflow-hidden">
+<aside class="w-20 flex flex-col items-center py-8 gap-10 border-r border-white/5 bg-[#0a0a12] z-20">
+<div class="size-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-white">electric_bolt</span>
+</div>
+<nav class="flex flex-col gap-6">
+<a class="text-primary group relative" href="#">
+<span class="material-symbols-outlined text-[28px]">home</span>
+<div class="absolute -right-2 top-1/2 -translate-y-1/2 w-1 h-4 bg-primary rounded-full"></div>
+</a>
+<a class="text-slate-500 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-[28px]">group</span>
+</a>
+<a class="text-slate-500 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-[28px]">library_music</span>
+</a>
+<a class="text-slate-500 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-[28px]">settings</span>
+</a>
+</nav>
+<div class="mt-auto">
+<div class="size-10 rounded-full border border-white/10 overflow-hidden ring-2 ring-primary/20">
+<img alt="Profile avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCl5L57aNq4Atv8jV8-O6IH-tjqsUR-XNie4m1ltGYo0KxcXHVSiGxD7v9EjCndVc-QHtDydUefaqyjoljf35A7sMQwh03mbXvjRcRs3QNCWDAF-xVWIY5SMMkHgYGYiYvvBQGOF0g2OSnD4sZcTjco9PvbvoJI_Dj-gNzQ2N3zN6rNM-sWKuudEe6ffDbddbWyNBNuAdujs1Wlf1WZgVLp6zUx_boXxqBsEho_IbcV26l-OCn3iJE1d6coysg0URap-1MLjGxvfNS"/>
+</div>
+</div>
+</aside>
+<aside class="w-72 glass-panel flex flex-col p-6 z-10 border-r-0 rounded-r-3xl">
+<div class="flex flex-col items-center text-center mb-10">
+<div class="relative mb-4">
+<div class="size-24 rounded-2xl overflow-hidden p-1 bg-gradient-to-tr from-primary to-secondary">
+<img alt="Taylor Swift Portrait" class="w-full h-full object-cover rounded-xl" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA99AD04fcawH3j3DgOS1Ni1hoR-WfmJGP-qIF0WfqCVPMtF_54rrD39dVBp1u1Ef6mSpxYyM4NGr9U37W6_hPex7UzIFu3LqGrEbMXtSgHLrl2pqngeL-mIfRN2vY-nUplTSMgyPzzpy0-lRm2l_rQG2TY2smNZPqilra3YQHejBruGPbO93PS_7JpXsFHC12vKGzKgLyaV3bsOkpZSR_QflBmNQks3Fn2bjwikfXCUR7hDObyibnJ9AyY8hzgE09a5Wgyl5rhrveo"/>
+</div>
+<div class="absolute -bottom-2 -right-2 bg-secondary rounded-full p-1 border-4 border-[#0e0e1a]">
+<span class="material-symbols-outlined text-white text-[16px] font-bold">verified</span>
+</div>
+</div>
+<h2 class="text-xl font-bold tracking-tight">Taylor Swift</h2>
+<p class="text-slate-400 text-xs font-semibold uppercase tracking-widest mt-1 opacity-70">Verified Artist</p>
+</div>
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/10 text-primary font-semibold border border-primary/20 relative group overflow-hidden" href="#">
+<div class="absolute left-0 top-1/4 bottom-1/4 w-1 bg-secondary rounded-full nav-indicator-glow"></div>
+<span class="material-symbols-outlined text-sm">grid_view</span>
+                Overview
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined text-sm">auto_awesome</span>
+                Brand Match
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined text-sm">difference</span>
+                Differentiators
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined text-sm">image_search</span>
+                Image Match
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined text-sm">menu_book</span>
+                Visual Glossary
+            </a>
+</nav>
+<div class="mt-auto pt-6 border-t border-white/5">
+<div class="p-4 rounded-2xl bg-white/5 border border-white/5">
+<p class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-2">Current Project</p>
+<p class="text-sm font-semibold mb-1">The Tortured Poets Department</p>
+<div class="h-1 w-full bg-white/10 rounded-full overflow-hidden mt-3">
+<div class="h-full bg-secondary w-3/4"></div>
+</div>
+</div>
+</div>
+</aside>
+<main class="flex-1 overflow-y-auto p-8 relative">
+<div class="absolute top-[-5%] right-[-5%] size-96 bg-primary/10 blur-[120px] rounded-full -z-10"></div>
+<div class="absolute bottom-[-5%] left-[-5%] size-96 bg-secondary/5 blur-[120px] rounded-full -z-10"></div>
+<header class="flex justify-between items-center mb-10">
+<div>
+<h1 class="text-3xl font-extrabold tracking-tight">Analytics Overview</h1>
+<p class="text-slate-400 font-medium">Real-time performance metrics across all platforms.</p>
+</div>
+<div class="flex gap-4">
+<button class="px-5 py-2.5 glass-card rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-sm">calendar_today</span>
+                    Last 30 Days
+                </button>
+<button class="px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-bold neon-glow-purple flex items-center gap-2 hover:opacity-90 transition-all">
+<span class="material-symbols-outlined text-sm">file_download</span>
+                    Export Report
+                </button>
+</div>
+</header>
+<div class="grid grid-cols-12 gap-6">
+<div class="col-span-8 glass-card p-6 rounded-3xl relative overflow-hidden group">
+<div class="flex justify-between items-start mb-4">
+<div>
+<p class="text-slate-400 text-sm font-semibold">Total Streams</p>
+<h3 class="text-4xl font-extrabold mt-1 tracking-tight">359,217</h3>
+</div>
+<div class="flex gap-3">
+<div class="size-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 hover:border-white/20 transition-colors">
+<span class="material-symbols-outlined text-xl text-green-400">podcasts</span>
+</div>
+<div class="size-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 hover:border-white/20 transition-colors">
+<span class="material-symbols-outlined text-xl text-blue-400">music_video</span>
+</div>
+<div class="size-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 hover:border-white/20 transition-colors">
+<span class="material-symbols-outlined text-xl text-red-400">play_circle</span>
+</div>
+</div>
+</div>
+<div class="h-72 relative mt-4 flex">
+<div class="flex flex-col justify-between text-[10px] text-slate-500 font-bold pr-4 py-2 border-r border-white/5 h-64">
+<span>10K</span>
+<span>7.5K</span>
+<span>5K</span>
+<span>2.5K</span>
+<span>0</span>
+</div>
+<div class="flex-1 relative h-64">
+<svg class="w-full h-full chart-glow overflow-visible" preserveAspectRatio="none" viewBox="0 0 1000 250">
+<defs>
+<linearGradient id="chartGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.2"></stop>
+<stop offset="100%" stop-color="#8b5cf6" stop-opacity="0"></stop>
+</linearGradient>
+</defs>
+<path d="M0,200 Q100,180 200,120 T400,100 T600,150 T800,50 T1000,80 L1000,250 L0,250 Z" fill="url(#chartGradient)"></path>
+<path d="M0,200 Q100,180 200,120 T400,100 T600,150 T800,50 T1000,80" fill="none" stroke="#8b5cf6" stroke-linecap="round" stroke-width="6"></path>
+<circle class="shadow-lg" cx="600" cy="150" fill="#8b5cf6" r="6"></circle>
+<circle cx="600" cy="150" fill="#8b5cf6" fill-opacity="0.3" r="14"></circle>
+</svg>
+<div class="absolute left-[540px] top-[90px] glass-panel px-3 py-1.5 rounded-lg border-primary/40 z-10 shadow-2xl">
+<p class="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Apr 19</p>
+<p class="text-sm font-black text-white">8,515 streams</p>
+</div>
+</div>
+</div>
+<div class="flex justify-between mt-1 px-2 ml-10">
+<span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Jan</span>
+<span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Feb</span>
+<span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Mar</span>
+<span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Apr</span>
+<span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">May</span>
+<span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Jun</span>
+<span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Jul</span>
+</div>
+</div>
+<div class="col-span-4 flex flex-col gap-6">
+<div class="glass-card p-6 rounded-3xl group">
+<div class="flex justify-between items-start mb-4">
+<div>
+<p class="text-slate-400 text-sm font-semibold">User Sign Ups</p>
+<h4 class="text-2xl font-extrabold mt-1 tracking-tight">5,235,002</h4>
+<div class="flex items-center gap-1.5 mt-2 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full w-fit">
+<span class="material-symbols-outlined text-[16px] font-bold">trending_up</span>
+<span class="text-[11px] font-black uppercase">+72 today</span>
+</div>
+</div>
+<div class="w-20 h-12">
+<svg class="w-full h-full drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]" viewBox="0 0 100 40">
+<path d="M0,35 Q20,30 40,35 T80,10 T100,5" fill="none" stroke="#10b981" stroke-linecap="round" stroke-width="3"></path>
+</svg>
+</div>
+</div>
+</div>
+<div class="bg-gradient-to-br from-[#8b5cf6] to-[#ec4899] p-7 rounded-3xl shadow-2xl shadow-primary/30 flex flex-col justify-between h-full relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-8 opacity-20 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-8xl">trending_up</span>
+</div>
+<div class="relative z-10">
+<div class="flex justify-between items-center mb-6">
+<p class="text-white/90 text-xs font-black uppercase tracking-[0.2em]">Growth</p>
+<span class="material-symbols-outlined text-white/80">analytics</span>
+</div>
+<div class="mt-4">
+<h4 class="text-5xl font-black text-white tracking-tighter">+852</h4>
+<div class="flex items-center gap-2 mt-3">
+<span class="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-black text-white border border-white/10">+18.5%</span>
+<span class="text-white/70 text-xs font-medium">Since last month</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="col-span-7 glass-card p-6 rounded-3xl">
+<div class="flex justify-between items-end mb-6">
+<div>
+<h4 class="text-lg font-bold">Performance Score</h4>
+<p class="text-slate-400 text-xs font-medium">Calculated based on engagement and conversion.</p>
+</div>
+<span class="text-3xl font-black text-secondary neon-text-cyan">80%</span>
+</div>
+<div class="h-4 w-full bg-white/5 rounded-full overflow-hidden mb-8 border border-white/5 p-0.5">
+<div class="h-full bg-gradient-to-r from-primary via-primary to-secondary w-[80%] rounded-full shadow-[0_0_15px_rgba(6,182,212,0.5)]"></div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex items-center justify-between px-5 py-4 glass-card rounded-2xl bg-white/5 hover:bg-white/[0.08] transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<div class="size-2.5 rounded-full bg-primary shadow-[0_0_10px_#8b5cf6]"></div>
+<span class="text-xs font-bold text-slate-200">Pop &amp; Vocals</span>
+</div>
+<span class="text-[10px] font-black text-slate-500 uppercase">Top Tier</span>
+</div>
+<div class="flex items-center justify-between px-5 py-4 glass-card rounded-2xl bg-white/5 hover:bg-white/[0.08] transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<div class="size-2.5 rounded-full bg-secondary shadow-[0_0_10px_#06b6d4]"></div>
+<span class="text-xs font-bold text-slate-200">Global Touring</span>
+</div>
+<span class="text-[10px] font-black text-slate-500 uppercase">Rising</span>
+</div>
+<div class="flex items-center justify-between px-5 py-4 glass-card rounded-2xl bg-white/5 hover:bg-white/[0.08] transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<div class="size-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981]"></div>
+<span class="text-xs font-bold text-slate-200">Fan Engagement</span>
+</div>
+<span class="text-[10px] font-black text-slate-500 uppercase">Stable</span>
+</div>
+<div class="flex items-center justify-between px-5 py-4 glass-card rounded-2xl bg-white/5 hover:bg-white/[0.08] transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<div class="size-2.5 rounded-full bg-amber-400 shadow-[0_0_10px_#fbbf24]"></div>
+<span class="text-xs font-bold text-slate-200">Merch Sales</span>
+</div>
+<span class="text-[10px] font-black text-slate-500 uppercase">High</span>
+</div>
+</div>
+</div>
+<div class="col-span-5 glass-card p-6 rounded-3xl flex flex-col">
+<h4 class="text-lg font-bold mb-6">Visual Vibe</h4>
+<div class="flex items-center justify-between gap-6 flex-1">
+<div class="flex-1 space-y-4">
+<div class="grid grid-cols-3 gap-2">
+<div class="h-12 rounded-lg bg-indigo-900/50 border border-indigo-400/20 shadow-inner"></div>
+<div class="h-12 rounded-lg bg-primary/80 border border-white/10 shadow-inner"></div>
+<div class="h-12 rounded-lg bg-secondary/80 border border-white/10 shadow-inner"></div>
+<div class="h-12 rounded-lg bg-background-dark border border-white/10"></div>
+<div class="h-12 rounded-lg bg-slate-100/90 border border-white/10 shadow-inner"></div>
+<div class="h-12 rounded-lg bg-amber-200/90 border border-white/10 shadow-inner"></div>
+</div>
+<div class="flex flex-wrap gap-2">
+<span class="px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] uppercase font-black text-slate-400 tracking-wider">Pastel</span>
+<span class="px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] uppercase font-black text-slate-400 tracking-wider">Dreamy</span>
+<span class="px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] uppercase font-black text-slate-400 tracking-wider">Cinematic</span>
+</div>
+</div>
+<div class="relative size-36 flex items-center justify-center">
+<svg class="size-full -rotate-90 absolute" viewBox="0 0 36 36">
+<circle cx="18" cy="18" fill="none" r="15" stroke="rgba(255,255,255,0.05)" stroke-width="4"></circle>
+<circle class="drop-shadow-[0_0_8px_rgba(139,92,246,0.6)]" cx="18" cy="18" fill="none" r="15" stroke="url(#vibesGradient)" stroke-dasharray="100" stroke-dashoffset="27" stroke-linecap="round" stroke-width="4.5"></circle>
+<circle cx="18" cy="18" fill="none" r="11" stroke="rgba(255,255,255,0.03)" stroke-width="3"></circle>
+<circle class="drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]" cx="18" cy="18" fill="none" opacity="0.8" r="11" stroke="#06b6d4" stroke-dasharray="100" stroke-dashoffset="55" stroke-linecap="round" stroke-width="3"></circle>
+<defs>
+<linearGradient id="vibesGradient" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" stop-color="#8b5cf6"></stop>
+<stop offset="100%" stop-color="#ec4899"></stop>
+</linearGradient>
+</defs>
+</svg>
+<div class="relative z-10 flex flex-col items-center justify-center">
+<span class="text-2xl font-black tracking-tighter">73%</span>
+<span class="text-[7px] uppercase font-black tracking-[0.2em] text-slate-400">Match</span>
+</div>
+</div>
+</div>
+<div class="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
+<span class="text-[10px] font-bold text-slate-500 uppercase">Trending Momentum</span>
+<span class="text-xs font-black text-secondary">45%</span>
+</div>
+</div>
+</div>
+<footer class="mt-10 mb-6 flex items-center justify-between glass-panel p-4 rounded-2xl border-white/10">
+<div class="flex items-center gap-6">
+<button class="flex items-center gap-2 px-5 py-2.5 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all group">
+<span class="material-symbols-outlined text-sm text-primary group-hover:scale-110 transition-transform">dashboard</span>
+<span class="text-sm font-bold">Glassy Cards</span>
+</button>
+<div class="h-8 w-[1px] bg-white/10"></div>
+<div class="flex items-center gap-2">
+<span class="text-[10px] font-black text-slate-500 tracking-[0.3em]">ALL OPTIONS</span>
+<span class="material-symbols-outlined text-slate-500 text-sm">keyboard_arrow_right</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="px-6 py-2 text-sm font-black tracking-[0.15em] text-slate-400 hover:text-white transition-colors">CLEAR</button>
+<button class="px-10 py-3 bg-primary rounded-xl text-sm font-black text-white shadow-xl shadow-primary/30 flex items-center gap-2 hover:translate-y-[-2px] hover:shadow-primary/40 transition-all">
+                    EXPLORE
+                    <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</footer>
+</main>
+</div>
+
+</body></html>
