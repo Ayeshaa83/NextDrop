@@ -1,4 +1,4 @@
-# NextDrop 💧
+# NextDrop
 
 **The Ultimate AI-Powered Ecosystem for Modern Music Success.**
 
@@ -6,7 +6,7 @@ NextDrop is a high-performance platform designed for independent artists, produc
 
 ---
 
-## ✨ Key Pillars
+##  Key Pillars
 
 ### 1. Platform (Overview)
 A "Command Center" bento-grid dashboard featuring:
