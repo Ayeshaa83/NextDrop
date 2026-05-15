@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
 import { useRequireAuth } from '@/lib/auth';
 import { useDashboard, formatNumber, formatCurrency } from '@/lib/hooks';
 import {
@@ -47,16 +48,31 @@ export default function Dashboard() {
       setChatInput("");
   };
 
+  const [viralStats, setViralStats] = useState<any>(null);
+
   useEffect(() => {
-    // Simulate terminal stream
-    const lines = [
-        "> Analyzing social sentiment across 14 networks...",
-        "> [TIKTOK] Heavy rotation detected: 'Neon Nights' (+142%)",
-        "> [SPOTIFY] Algorithmic playlist addition confirmed.",
-        "> [YOUTUBE] Comment sentiment: 94% POSITIVE.",
-        "> Global buzz threshold exceeded. Ready for push."
+    fetch('http://localhost:8000/api/analytics/viral-velocity?track_id=1')
+      .then(r => r.json())
+      .then(d => setViralStats(d))
+      .catch(e => console.log('Viral Velocity API not reachable', e));
+  }, []);
+
+  useEffect(() => {
+    // Generate terminal stream based on real IG stats if available
+    const lines = viralStats ? [
+        `> Connected to Instagram Graph API (Simulated: ${viralStats.is_simulated})...`,
+        `> Analyzing Reel engagement signatures across regions.`,
+        `> [INSTAGRAM] Velocity Index calculated at ${viralStats.viral_velocity_score.toFixed(1)} bps.`,
+        `> [INSTAGRAM] High resonance in ${viralStats.top_region}. Raw reach: ${formatNumber(viralStats.raw_reach)}.`,
+        `> Prescriptive insight generated. Review 'Network Intel' for ad-spend instructions.`
+    ] : [
+        "> Attempting connection to Meta Instagram Graph API...",
+        "> Scanning token matrix...",
+        "> Awaiting viral velocity handshake...",
+        "> Building regional heatmap..."
     ];
     let i = 0;
+    setTerminalLines([]); // Reset terminal when data loads
     const interval = setInterval(() => {
         if (i < lines.length) {
             setTerminalLines(prev => [...prev, lines[i]]);
@@ -66,7 +82,7 @@ export default function Dashboard() {
         }
     }, 1200);
     return () => clearInterval(interval);
-  }, []);
+  }, [viralStats]);
 
   if (authLoading || dataLoading) {
     return (
@@ -327,35 +343,49 @@ export default function Dashboard() {
                 </div>
             </motion.div>
 
-            {/* 2. AI Network Insights (Chatter) - Col Span 4 */}
+            {/* 2. Instagram Marketing Insights (Chatter) - Col Span 4 */}
             <motion.div variants={item} className="col-span-12 xl:col-span-4 card-premium flex flex-col relative overflow-hidden h-[360px] xl:h-auto">
                 <div className="p-5 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
                     <div className="flex items-center gap-2">
-                        <Sparkles className="size-4 text-emerald-400" />
-                        <h3 className="text-sm font-black uppercase tracking-widest text-white">Network Intel</h3>
+                        <Sparkles className="size-4 text-[#ff2a5f]" />
+                        <h3 className="text-sm font-black uppercase tracking-widest text-white">IG Marketing AI</h3>
                     </div>
-                    <Bot className="size-4 text-slate-500" />
+                    {viralStats ? (
+                        <div className="flex items-center gap-2">
+                            <span className="flex size-2 bg-emerald-500 rounded-full animate-pulse blur-[1px]"></span>
+                            <span className="text-[10px] font-black tracking-widest text-slate-500 uppercase">Live</span>
+                        </div>
+                    ) : (
+                         <Loader2 className="size-4 text-slate-500 animate-spin" />
+                    )}
                 </div>
                 
                 <div className="flex-1 p-5 space-y-4 overflow-y-auto custom-scrollbar flex flex-col gap-2 relative z-10">
                     <div className="bg-white/5 border border-white/5 rounded-r-xl rounded-bl-xl p-3 max-w-[90%]">
                         <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                            <strong className="text-white">Trend Alert:</strong> Phonk beats with Indian classical samples are surging in tier-1 playlists.
+                            <strong className="text-white">Trend Alert:</strong> Instagram velocity index for your latest track is <strong className="text-[#ff2a5f]">{viralStats?.viral_velocity_score?.toFixed(1) || '0.0'} bps</strong>. Core growth mapped to {viralStats?.top_region || 'Unknown'}.
                         </p>
                     </div>
-                    <div className="bg-primary/10 border border-primary/20 rounded-l-xl rounded-br-xl p-3 max-w-[90%] self-end">
-                        <p className="text-xs text-primary-200 leading-relaxed font-medium">
-                            Your track <strong className="text-white">"Neon Nights"</strong> aligns perfectly. Pushing to Discovery Queue.
+                    
+                    <div className="bg-[#ff2a5f]/10 border border-[#ff2a5f]/20 rounded-l-xl rounded-br-xl p-3 max-w-[90%] self-end">
+                        <p className="text-xs text-[#ff2a5f] leading-relaxed font-medium drop-shadow-[0_0_8px_rgba(255,42,95,0.4)]">
+                            {viralStats?.suggestion || "Processing natural language insight from meta stream..."}
                         </p>
                     </div>
-                    <div className="bg-white/5 border border-white/5 rounded-r-xl rounded-bl-xl p-3 max-w-[90%] flex items-center gap-3 mt-auto">
-                        <div className="size-8 rounded-lg bg-[#050505] flex items-center justify-center shrink-0">
-                            <TrendingUp className="size-4 text-emerald-400" />
+
+                    <div className="bg-white/5 border border-white/5 rounded-r-xl rounded-bl-xl p-3 max-w-[100%] flex flex-col gap-3 mt-auto">
+                        <div className="flex items-center gap-2">
+                             <div className="size-8 rounded-lg bg-[#050505] flex items-center justify-center shrink-0 border border-white/10">
+                                 <Activity className="size-4 text-[#ff2a5f]" />
+                             </div>
+                             <div>
+                                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Raw Audience Extension</p>
+                                 <p className="text-sm text-white font-bold tracking-tight">{viralStats ? formatNumber(viralStats.raw_reach) : '0'} Unique Reach</p>
+                             </div>
                         </div>
-                        <div>
-                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Action Suggested</p>
-                            <p className="text-xs text-white font-medium">Cut a 15s snippet for TikTok.</p>
-                        </div>
+                        <button className="w-full uppercase text-[10px] font-black tracking-widest bg-white text-black py-2 rounded-lg hover:scale-[1.02] transition-transform">
+                             Execute Ad Campaign Strategy
+                        </button>
                     </div>
                 </div>
             </motion.div>

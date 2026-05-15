@@ -232,7 +232,7 @@ async def get_user_top_tracks(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
     limit: int = Query(20, ge=1, le=50),
-    time_range: str = Query("medium_term", regex="^(short_term|medium_term|long_term)$")
+    time_range: str = Query("medium_term", pattern="^(short_term|medium_term|long_term)$")
 ):
     """
     Get the user's top tracks from Spotify.
@@ -275,7 +275,7 @@ async def get_user_top_artists(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
     limit: int = Query(20, ge=1, le=50),
-    time_range: str = Query("medium_term", regex="^(short_term|medium_term|long_term)$")
+    time_range: str = Query("medium_term", pattern="^(short_term|medium_term|long_term)$")
 ):
     """
     Get the user's top artists from Spotify.

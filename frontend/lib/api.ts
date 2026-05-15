@@ -762,3 +762,110 @@ export const analyzeApi = {
     return response.json();
   },
 };
+
+// ============ AI FEATURES API ============
+
+export interface MetadataSuggestion {
+  genre: string;
+  mood: string;
+  bpm: number;
+  key: string;
+  energy: number;
+  danceability: number;
+  confidence: number;
+}
+
+export interface PerformanceInsight {
+  headline: string;
+  body: string;
+  trend: 'up' | 'down' | 'stable';
+  percentage_change: number;
+  tip: string;
+}
+
+export interface TerritoryGrowthItem {
+  country: string;
+  country_code: string;
+  growth_percentage: number;
+  streams: number;
+  reason: string;
+  flag_emoji: string;
+}
+
+export interface TerritoryGrowthData {
+  territories: TerritoryGrowthItem[];
+  summary: string;
+}
+
+export interface ReleaseWindow {
+  day: string;
+  time_utc: string;
+  time_label: string;
+  score: number;
+}
+
+export interface ReleaseTimingData {
+  golden_window: ReleaseWindow;
+  alternatives: ReleaseWindow[];
+  justification: string;
+  playlist_target: string;
+}
+
+export const aiApi = {
+  async suggestMetadata(audioFileId?: number, title?: string): Promise<MetadataSuggestion> {
+    return apiFetch<MetadataSuggestion>('/api/ai/suggest-metadata', {
+      method: 'POST',
+      body: JSON.stringify({ audio_file_id: audioFileId || null, title: title || null }),
+    });
+  },
+
+  async getPerformanceInsight(data: {
+    track_title: string;
+    current_streams: number;
+    previous_streams: number;
+    current_saves?: number;
+    previous_saves?: number;
+  }): Promise<PerformanceInsight> {
+    return apiFetch<PerformanceInsight>('/api/ai/performance-insight', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getTerritoryGrowth(): Promise<TerritoryGrowthData> {
+    return apiFetch<TerritoryGrowthData>('/api/ai/territory-growth');
+  },
+
+  async getReleaseTiming(): Promise<ReleaseTimingData> {
+    return apiFetch<ReleaseTimingData>('/api/ai/release-timing');
+  },
+
+  async getAudioDNA(title?: string, audioFileId?: number): Promise<AudioDNAData> {
+    return apiFetch<AudioDNAData>('/api/ai/audio-dna', {
+      method: 'POST',
+      body: JSON.stringify({ title: title || null, audio_file_id: audioFileId || null }),
+    });
+  },
+};
+
+// ============ AUDIO DNA TYPES ============
+
+export interface AudioFeature {
+  name: string;
+  value: number;
+  raw_value: number;
+  unit: string;
+}
+
+export interface AudioDNACategory {
+  category: string;
+  color: string;
+  features: AudioFeature[];
+}
+
+export interface AudioDNAData {
+  track_title: string;
+  categories: AudioDNACategory[];
+  overall_quality: number;
+}
+

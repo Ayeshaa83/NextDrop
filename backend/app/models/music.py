@@ -84,4 +84,16 @@ class Track(Base):
     # Social relationships
     social_posts: Mapped[list["SocialPost"]] = relationship(back_populates="track")
     collaborations: Mapped[list["Collaboration"]] = relationship(back_populates="track")
-    albums: Mapped[list["Album"]] = relationship(secondary="album_tracks", back_populates="tracks")
+    split_sheets: Mapped[list["TrackCollaborator"]] = relationship(back_populates="track")
+
+class TrackCollaborator(Base):
+    __tablename__ = "track_collaborators"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    royalty_percentage: Mapped[float] = mapped_column(default=100.0)
+    role: Mapped[str] = mapped_column(String(50), nullable=True) # e.g. "Producer", "Lyricist"
+
+    track: Mapped["Track"] = relationship(back_populates="split_sheets")
+    user: Mapped["User"] = relationship()

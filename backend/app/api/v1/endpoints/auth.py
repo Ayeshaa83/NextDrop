@@ -2,6 +2,7 @@ from typing import Any
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from app.api import deps
 from app.crud import user as user_crud
 from app.schemas.user import UserCreate, UserResponse
@@ -13,8 +14,15 @@ router = APIRouter()
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def signup(user_in: UserCreate, db: Session = Depends(deps.get_db)):
-    # 1. Check if user already exists
-    user = user_crud.get_user_by_email(db, email=user_in.email)
+    try:
+        # 1. Check if user already exists
+        user = user_crud.get_user_by_email(db, email=user_in.email)
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is currently unavailable. Please try again shortly.",
+        )
+
     if user:
         raise HTTPException(
             status_code=400,
@@ -22,7 +30,14 @@ def signup(user_in: UserCreate, db: Session = Depends(deps.get_db)):
         )
     
     # 2. Create the user
-    new_user = user_crud.create_user(db, user_in=user_in)
+    try:
+        new_user = user_crud.create_user(db, user_in=user_in)
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is currently unavailable. Please try again shortly.",
+        )
+
     return new_user
 
 @router.post("/login/access-token", response_model=Token)
@@ -35,8 +50,14 @@ def login_access_token(
     OAuth2 compatible token login, get an access token for future requests.
     Sets HttpOnly cookie for secure browser authentication.
     """
-    # 1. Authenticate
-    user = user_crud.get_user_by_email(db, email=form_data.username)
+    try:
+        # 1. Authenticate
+        user = user_crud.get_user_by_email(db, email=form_data.username)
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is currently unavailable. Please try again shortly.",
+        )
     
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(

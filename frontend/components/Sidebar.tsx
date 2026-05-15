@@ -68,13 +68,13 @@ export default function Sidebar() {
     ];
 
     return (
-        <aside className="w-[240px] flex flex-col py-8 border-r border-border-dark bg-bg-deep shrink-0 h-full z-30">
-            <div className="px-8 mb-10 overflow-hidden">
-                <Link href="/" className="flex items-center gap-3 transition-transform active:scale-95">
-                    <div className="size-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                        <span className="material-symbols-outlined text-white text-xl">electric_bolt</span>
+        <aside className="w-[240px] flex flex-col py-6 border-r border-border-dark bg-bg-deep shrink-0 h-full z-30">
+            <div className="px-6 mb-4 overflow-hidden">
+                <Link href="/" className="flex items-center gap-2 transition-transform active:scale-95 group">
+                    <div className="size-9 flex items-center justify-center transition-transform group-hover:rotate-[5deg] shrink-0">
+                        <img src="/logo.png" alt="NextDrop Logo" className="size-full object-contain" />
                     </div>
-                    <span className="font-extrabold text-xl tracking-tight text-white">NextDrop</span>
+                    <span className="font-extrabold text-lg tracking-tight text-white">NextDrop</span>
                 </Link>
             </div>
 

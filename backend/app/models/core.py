@@ -64,3 +64,12 @@ class Artist(Base):
     post_likes: Mapped[list["PostLike"]] = relationship(back_populates="artist")
     initiated_collabs: Mapped[list["Collaboration"]] = relationship(foreign_keys="Collaboration.initiator_id", back_populates="initiator")
     received_collabs: Mapped[list["Collaboration"]] = relationship(foreign_keys="Collaboration.collaborator_id", back_populates="collaborator")
+
+class Wallet(Base):
+    __tablename__ = "wallets"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+    balance: Mapped[float] = mapped_column(default=0.0)
+    
+    owner: Mapped["User"] = relationship()

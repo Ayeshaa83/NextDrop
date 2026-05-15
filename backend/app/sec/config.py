@@ -3,6 +3,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # Your existing database URL
     DATABASE_URL: str
+    # Optional DB IP override to bypass local DNS issues in development.
+    DATABASE_HOSTADDR: str = ""
     
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
@@ -25,6 +27,13 @@ class Settings(BaseSettings):
     YOUTUBE_CLIENT_ID: str = ""
     YOUTUBE_CLIENT_SECRET: str = ""
     YOUTUBE_REDIRECT_URI: str = "http://localhost:8000/api/v1/youtube/callback"
+
+    # Instagram
+    INSTAGRAM_ACCESS_TOKEN: str = ""
+    INSTAGRAM_ACCOUNT_ID: str = ""
+
+    # Simulation Mode
+    DEMO_MODE: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env", 

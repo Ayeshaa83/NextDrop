@@ -63,9 +63,9 @@ export default function Signup() {
             <div className="w-full max-w-lg z-10 p-6 animate-fade-in-up mt-10">
 
                 {/* Brand Header */}
-                <div className="flex flex-col items-center mb-8">
-                    <div className="size-16 rounded-3xl bg-linear-to-br from-secondary to-primary flex items-center justify-center shadow-[0_0_40px_rgba(0,242,254,0.5)] mb-6 group cursor-pointer hover:scale-105 transition-transform">
-                        <span className="material-symbols-outlined text-white text-3xl drop-shadow-md">electric_bolt</span>
+                <div className="flex flex-col items-center mb-7">
+                    <div className="size-20 flex items-center justify-center mb-4 group cursor-pointer hover:scale-110 hover:rotate-[-5deg] transition-all duration-300">
+                        <img src="/logo.png" alt="NextDrop" className="size-full object-contain drop-shadow-[0_0_30px_rgba(0,242,254,0.4)]" />
                     </div>
                     <h1 className="text-3xl font-black text-white tracking-tight drop-shadow-lg mb-2 text-center">Join the Movement.</h1>
                     <p className="text-slate-400 font-semibold text-sm text-center">Create your NextDrop account to start collaborating.</p>
