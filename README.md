@@ -8,22 +8,22 @@ NextDrop is a high-performance platform designed for independent artists, produc
 
 ##  Key Pillars
 
-### 1. Platform (Overview)
+### 1. Platform 
 A "Command Center" bento-grid dashboard featuring:
 *   **Minimalist Global Pulse**: Real-time visual tracking of your global reach.
 *   **Community Buzz**: Interactive, real-time feedback loop with other producers and fans.
 *   **Network Intel**: AI-driven sentiment analysis and trend alerts.
 
-### 2. Creation (The Lab)
+### 2. Creation 
 *   **Smart Upload Wizard**: Drag-and-drop audio to receive instant BPM, Key, Genre, and Mood analysis.
 *   **Hit Potential Predictor**: Proprietary AI scoring to gauge your track's marketability.
 *   **Jam Jar (Remix Mode)**: A collaborative social feed where "Open Verse" tracks radiate with a glow, inviting remixes.
 
-### 3. Library (Management)
+### 3. Library 
 *   **Unified Track Manager**: Dense, high-contrast list view for managing your entire catalog.
 *   **AI Processing Status**: Real-time badges showing analysis progress and distribution readiness.
 
-### 4. Marketing (Growth Suite)
+### 4. Marketing 
 *   **AI Asset Generators**: One-click generation for IG Reel scripts and Spotify Canvas concepts.
 *   **Deep Analytics**: Insights into where your music is trending and how to double down on success.
 
@@ -33,7 +33,7 @@ A "Command Center" bento-grid dashboard featuring:
 
 *   **Frontend**: Next.js 15, React, TailwindCSS, Framer Motion, Lucide Icons.
 *   **Backend**: Python (FastAPI/Uvicorn), AI-driven audio processing units.
-*   **Design**: High-contrast, minimalist "Decent" aesthetic.
+*   **Design**: High-contrast, minimalist aesthetic.
 
 ---
 
