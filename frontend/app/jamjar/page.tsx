@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { usePlayer } from '@/lib/playerStore';
 
 // Format relative time
 function formatTimeAgo(dateStr: string): string {
@@ -47,6 +48,43 @@ function PostCard({
     const [showComments, setShowComments] = useState(false);
     const [isLiking, setIsLiking] = useState(false);
     const [localPost, setLocalPost] = useState(post);
+    const [collabStatus, setCollabStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+    const [shareCopied, setShareCopied] = useState(false);
+    const { playTracks, currentTrack, isPlaying } = usePlayer();
+
+    const handlePlaySnippet = () => {
+        if (!localPost.track?.file_url) return;
+        playTracks([{
+            id: localPost.track.id,
+            title: localPost.track.title,
+            artist: localPost.artist.stage_name,
+            url: localPost.track.file_url,
+            duration: localPost.track.duration,
+        }], 0);
+    };
+
+    const handleShare = async () => {
+        try {
+            await navigator.clipboard.writeText(`${window.location.origin}/jamjar?post=${localPost.id}`);
+            setShareCopied(true);
+            setTimeout(() => setShareCopied(false), 2000);
+        } catch {
+            // Clipboard unavailable — ignore
+        }
+    };
+
+    const handleCollabRequest = async () => {
+        if (collabStatus === 'sending' || collabStatus === 'sent') return;
+        setCollabStatus('sending');
+        try {
+            await feedApi.sendCollabRequest(localPost.id, `Hey ${localPost.artist.stage_name}, I'd love to collaborate on this!`);
+            setCollabStatus('sent');
+        } catch (err) {
+            console.error('Failed to send collab request:', err);
+            setCollabStatus('error');
+            setTimeout(() => setCollabStatus('idle'), 2500);
+        }
+    };
 
     const handleLike = async () => {
         if (isLiking) return;
@@ -146,8 +184,15 @@ function PostCard({
             {/* Audio Snippet Player */}
             {localPost.track && (
                 <div className="bg-[#050505]/60 border border-white/5 rounded-2xl p-4 flex items-center gap-5 group/audio hover:border-white/10 transition-all">
-                    <button className="size-11 rounded-xl bg-white text-black flex items-center justify-center transition-transform active:scale-95 cursor-pointer">
-                        <Play className="size-5 fill-current" />
+                    <button
+                        onClick={handlePlaySnippet}
+                        disabled={!localPost.track.file_url}
+                        className="size-11 rounded-xl bg-white text-black flex items-center justify-center transition-transform active:scale-95 cursor-pointer disabled:opacity-40"
+                    >
+                        <Play className={cn(
+                            "size-5 fill-current",
+                            currentTrack?.id === localPost.track.id && isPlaying && "animate-pulse"
+                        )} />
                     </button>
                     <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1">
@@ -188,16 +233,32 @@ function PostCard({
                 </div>
                 <div className="flex items-center gap-6">
                     <button
-                        onClick={() => alert('Sharing vibe to network...')}
-                        className="text-slate-500 hover:text-white transition-all cursor-pointer"
+                        onClick={handleShare}
+                        title="Copy link"
+                        className={cn(
+                            "flex items-center gap-1.5 transition-all cursor-pointer text-xs font-bold",
+                            shareCopied ? "text-emerald-400" : "text-slate-500 hover:text-white"
+                        )}
                     >
                         <Share2 className="size-4" />
+                        {shareCopied && 'Copied!'}
                     </button>
                     <button
-                        onClick={() => alert(`Initiating collab request with ${localPost.artist.stage_name}...`)}
-                        className="px-5 py-2 bg-secondary/10 border border-secondary/20 rounded-xl text-[10px] font-black uppercase tracking-widest text-secondary hover:bg-secondary hover:text-black transition-all cursor-pointer shadow-lg shadow-secondary/5"
+                        onClick={handleCollabRequest}
+                        disabled={collabStatus === 'sending' || collabStatus === 'sent'}
+                        className={cn(
+                            "px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg",
+                            collabStatus === 'sent'
+                                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                                : collabStatus === 'error'
+                                ? "bg-red-500/10 border border-red-500/20 text-red-400"
+                                : "bg-secondary/10 border border-secondary/20 text-secondary hover:bg-secondary hover:text-black shadow-secondary/5"
+                        )}
                     >
-                        Collab
+                        {collabStatus === 'sent' ? 'Request Sent ✓'
+                            : collabStatus === 'sending' ? 'Sending...'
+                            : collabStatus === 'error' ? 'Failed — Retry'
+                            : 'Collab'}
                     </button>
                 </div>
             </div>

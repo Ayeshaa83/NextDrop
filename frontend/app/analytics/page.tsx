@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRequireAuth } from '@/lib/auth';
-import { useDashboard, formatNumber } from '@/lib/hooks';
+import { useDashboard, useTimeseries, useTerritories, formatNumber } from '@/lib/hooks';
 import {
-    TrendingUp, Zap, LineChart, PieChart as PieChartIcon, Download, Target, 
-    ChevronRight, Sparkles, Activity, Clock, Globe2, AlertCircle, PlayCircle, MapPin
+    LineChart, Download, Sparkles, Globe2, AlertCircle, PlayCircle, MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -13,36 +12,56 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
     PieChart, Pie, Cell
 } from 'recharts';
+import SmartInsightCard from '@/components/ai/SmartInsightCard';
+import ReleaseTimerDial from '@/components/ai/ReleaseTimerDial';
+import TerritoryGrowthMap from '@/components/ai/TerritoryGrowthMap';
 
-const trajectoryData = [
-    { day: 'Mon', streams: 12000, projected: 12000 },
-    { day: 'Tue', streams: 25000, projected: 25000 },
-    { day: 'Wed', streams: 82000, projected: 82000 },
-    { day: 'Thu', streams: null, projected: 150000 },
-    { day: 'Fri', streams: null, projected: 320000 },
-    { day: 'Sat', streams: null, projected: 280000 },
-    { day: 'Sun', streams: null, projected: 250000 }
-];
+// ISO country code -> display name
+const countryName = (code: string) => {
+    try {
+        return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code;
+    } catch {
+        return code;
+    }
+};
 
-const platformData = [
+const DEFAULT_PLATFORM_DATA = [
     { name: 'Spotify', value: 45, color: '#1DB954' },
     { name: 'Apple Music', value: 25, color: '#fa243c' },
     { name: 'YouTube', value: 15, color: '#FF0000' },
     { name: 'Instagram', value: 15, color: '#E1306C' },
 ];
 
+const PLATFORM_COLORS: Record<string, string> = {
+    'Spotify': '#1DB954',
+    'YouTube': '#FF0000',
+    'Apple Music': '#fa243c',
+    'Instagram': '#E1306C',
+    'TikTok': '#00f2fe'
+};
+
 export default function AnalyticsDashboard() {
     const { user } = useRequireAuth();
     const { data: dashboard, loading } = useDashboard();
-    const [viralStats, setViralStats] = useState<any>(null);
+    const { data: timeseries } = useTimeseries(30);
+    const { data: territoryData } = useTerritories();
     const [showRegionWhy, setShowRegionWhy] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetch('http://localhost:8000/api/analytics/viral-velocity?track_id=1')
-            .then(r => r.json())
-            .then(d => setViralStats(d))
-            .catch(e => console.log('Viral Velocity API not reachable', e));
-    }, []);
+    // Real streams-over-time points from analytics snapshots
+    const trajectoryData = (timeseries?.points || []).map(p => ({
+        day: new Date(p.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        streams: p.total,
+        youtube: p.youtube || 0,
+        spotify: p.spotify || 0,
+    }));
+
+    // Week-over-week growth from the same series
+    const points = timeseries?.points || [];
+    const lastWeek = points.slice(-7).reduce((s, p) => s + p.total, 0);
+    const prevWeek = points.slice(-14, -7).reduce((s, p) => s + p.total, 0);
+    const weekGrowth = prevWeek > 0 ? ((lastWeek - prevWeek) / prevWeek) * 100 : null;
+
+    const territories = territoryData?.territories || [];
 
     const container = {
         hidden: { opacity: 0 },
@@ -53,6 +72,17 @@ export default function AnalyticsDashboard() {
         hidden: { opacity: 0, y: 20 },
         show: { opacity: 1, y: 0 }
     };
+    
+    // Transform backend dict to recharts array
+    const platformData = dashboard?.platform_breakdown 
+        ? Object.entries(dashboard.platform_breakdown)
+            .filter(([_, val]) => val > 0)
+            .map(([name, value]) => ({
+                name,
+                value,
+                color: PLATFORM_COLORS[name] || '#8884d8'
+            }))
+        : DEFAULT_PLATFORM_DATA;
 
     if (loading) return <div className="flex h-[calc(100vh-80px)] items-center justify-center"><div className="size-10 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -76,87 +106,24 @@ export default function AnalyticsDashboard() {
                 </div>
             </motion.header>
 
-            {/* 1. AI Command Center */}
+            {/* 1. AI Command Center — live components backed by /api/ai */}
             <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                {/* Smart Release Timer */}
-                <div className="col-span-1 xl:col-span-4 card-premium p-8 relative overflow-hidden group">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="size-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                            <Clock className="size-4" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-white leading-none">Smart Release</h3>
-                            <p className="text-[10px] uppercase font-black tracking-widest text-emerald-400/80">Golden Window Active</p>
-                        </div>
-                    </div>
+                {/* Smart Release Timer (data-driven golden window) */}
+                <ReleaseTimerDial className="col-span-1 xl:col-span-4" />
 
-                    <div className="flex flex-col items-center justify-center py-6 relative">
-                        {/* Circular Gauge */}
-                        <div className="relative size-48 flex items-center justify-center">
-                            <svg className="absolute inset-0 size-full -rotate-90" viewBox="0 0 100 100">
-                                <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" strokeLinecap="round" />
-                                <motion.circle 
-                                    cx="50" cy="50" r="45" fill="none" stroke="#10b981" strokeWidth="6" strokeLinecap="round" 
-                                    strokeDasharray="283" strokeDashoffset="40" filter="drop-shadow(0 0 8px rgba(16,185,129,0.5))"
-                                    initial={{ strokeDashoffset: 283 }} animate={{ strokeDashoffset: 40 }} transition={{ duration: 2, ease: "easeOut" }}
-                                />
-                            </svg>
-                            <div className="text-center absolute">
-                                <span className="block text-3xl font-black text-white tracking-tighter">FRI</span>
-                                <span className="block text-emerald-400 font-bold tracking-widest">6:00 PM</span>
-                                <span className="block text-[9px] uppercase font-black text-slate-500 tracking-widest mt-1">GMT</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-4 bg-white/5 border border-white/5 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
-                                <Zap className="size-3 text-emerald-400" /> AI Justification
-                            </span>
-                        </div>
-                        <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                            <span className="text-white font-bold">Optimal Impact:</span> Aligned with Spotify's New Music Friday playlist refresh cycle and peak weekend engagement velocity in your top territories.
-                        </p>
-                    </div>
-                </div>
-
-                {/* Natural Language Insights */}
+                {/* AI Insights */}
                 <div className="col-span-1 xl:col-span-8 flex flex-col">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         Natural Language Insights
-                        <span className="text-[9px] font-black uppercase bg-primary/20 text-primary px-2 py-0.5 rounded-full border border-primary/20">Auto-Generated</span>
+                        <span className="text-[9px] font-black uppercase bg-primary/20 text-primary px-2 py-0.5 rounded-full border border-primary/20">AI-Generated</span>
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
-                        {/* Insight 1 */}
-                        <div className="card-premium p-6 flex flex-col justify-between border border-white/5 hover:border-primary/30 transition-all group">
-                            <div>
-                                <span className="inline-block px-2.5 py-1 bg-[#ff2a5f]/10 border border-[#ff2a5f]/20 text-[#ff2a5f] text-[9px] font-black uppercase tracking-widest rounded-lg mb-4">
-                                    Source: Instagram API
-                                </span>
-                                <p className="text-sm font-medium text-white leading-relaxed group-hover:text-primary-100 transition-colors">
-                                    {viralStats?.suggestion || "Your latest track is gaining significant momentum in Latin America. Consider deploying a localized Spanish-language promo campaign on Instagram Reels to accelerate growth."}
-                                </p>
-                            </div>
-                            <div className="mt-6 flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 tracking-widest">
-                                <Target className="size-3 text-[#ff2a5f]" /> Actionable Strategy
-                            </div>
-                        </div>
-
-                        {/* Insight 2 */}
-                        <div className="card-premium p-6 flex flex-col justify-between border border-white/5 hover:border-primary/30 transition-all group">
-                            <div>
-                                <span className="inline-block px-2.5 py-1 bg-primary/10 border border-primary/20 text-primary text-[9px] font-black uppercase tracking-widest rounded-lg mb-4">
-                                    Source: Audio DNA Analysis
-                                </span>
-                                <p className="text-sm font-medium text-white leading-relaxed group-hover:text-primary-100 transition-colors">
-                                    The rhythmic syncopation detected strongly correlates with current TikTok dance trends (89% match). A potent hook is located at 0:45.
-                                </p>
-                            </div>
-                            <div className="mt-6 flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 tracking-widest">
-                                <Activity className="size-3 text-primary" /> Algorithmic Match
-                            </div>
-                        </div>
+                        <SmartInsightCard
+                            trackTitle="Your Catalog"
+                            currentStreams={lastWeek || dashboard?.total_streams || 0}
+                            previousStreams={prevWeek || 0}
+                        />
+                        <TerritoryGrowthMap />
                     </div>
                 </div>
             </motion.div>
@@ -173,12 +140,28 @@ export default function AnalyticsDashboard() {
                             <p className="text-slate-500 text-xs font-medium focus:outline-none">Live velocity vs Predictive model</p>
                         </div>
                         <div className="text-right">
-                            <p className="text-3xl font-black text-white">{formatNumber(dashboard?.total_streams || 119000)}</p>
-                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">+12.4% vs last week</span>
+                            <p className="text-3xl font-black text-white">{formatNumber(dashboard?.total_streams || 0)}</p>
+                            {weekGrowth !== null && (
+                                <span className={cn(
+                                    "text-[10px] font-black uppercase tracking-widest",
+                                    weekGrowth >= 0 ? "text-emerald-400" : "text-red-400"
+                                )}>
+                                    {weekGrowth >= 0 ? '+' : ''}{weekGrowth.toFixed(1)}% vs last week
+                                </span>
+                            )}
                         </div>
                     </div>
 
                     <div className="h-[300px] w-full -ml-4 z-10">
+                        {trajectoryData.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-8">
+                                <LineChart className="size-8 text-slate-600" />
+                                <p className="text-sm text-slate-500 font-medium max-w-sm">
+                                    No stream history yet. Distribute a track and refresh platform analytics
+                                    (or run a simulation) to start building your trajectory.
+                                </p>
+                            </div>
+                        ) : (
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={trajectoryData}>
                                 <defs>
@@ -186,22 +169,23 @@ export default function AnalyticsDashboard() {
                                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
                                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                                     </linearGradient>
-                                    <linearGradient id="colorProjected" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.2}/>
-                                        <stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/>
+                                    <linearGradient id="colorSpotify" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#1DB954" stopOpacity={0.25}/>
+                                        <stop offset="95%" stopColor="#1DB954" stopOpacity={0}/>
                                     </linearGradient>
                                 </defs>
                                 <XAxis dataKey="day" stroke="#334155" fontSize={11} tickMargin={10} axisLine={false} tickLine={false} />
-                                <YAxis stroke="#334155" fontSize={11} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v/1000)}k`} />
+                                <YAxis stroke="#334155" fontSize={11} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${(v/1000)}k` : v} />
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" opacity={0.5} />
-                                <RechartsTooltip 
+                                <RechartsTooltip
                                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
                                     itemStyle={{ color: '#fff' }} cursor={{ stroke: '#475569', strokeWidth: 1, strokeDasharray: '4 4' }}
                                 />
-                                <Area type="monotone" dataKey="projected" stroke="#94a3b8" strokeDasharray="5 5" fillOpacity={1} fill="url(#colorProjected)" name="Predicted Trend" strokeWidth={2} />
-                                <Area type="monotone" dataKey="streams" stroke="#6366f1" fillOpacity={1} fill="url(#colorStreams)" name="Actual Streams" strokeWidth={3} />
+                                <Area type="monotone" dataKey="spotify" stroke="#1DB954" fillOpacity={1} fill="url(#colorSpotify)" name="Spotify" strokeWidth={2} />
+                                <Area type="monotone" dataKey="streams" stroke="#6366f1" fillOpacity={1} fill="url(#colorStreams)" name="Total Streams" strokeWidth={3} />
                             </AreaChart>
                         </ResponsiveContainer>
+                        )}
                     </div>
                 </div>
 
@@ -242,36 +226,45 @@ export default function AnalyticsDashboard() {
                         </div>
                         
                         <div className="space-y-1">
-                            {[
-                                { locale: 'India', growth: 24.2, why: "High acoustic affinity for rhythmic drops combining 120 BPM with minor eastern scales present in your track." },
-                                { locale: 'Brazil', growth: 18.5, why: "Viral Reels usage pushing track into localized Phonk discovery playlists." },
-                                { locale: 'Germany', growth: 12.1, why: "Algorithmic pairing with European electronic mood radio streams." }
-                            ].map(region => (
-                                <div key={region.locale} className="relative group/territory rounded-xl p-3 hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
+                            {territories.length === 0 ? (
+                                <p className="text-xs text-slate-500 font-medium py-4 text-center">
+                                    No country-level data yet. Territory stats appear once your streams
+                                    include regional attribution.
+                                </p>
+                            ) : territories.slice(0, 5).map(region => (
+                                <div key={region.country} className="relative group/territory rounded-xl p-3 hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm font-bold text-white flex items-center gap-2">
-                                            <MapPin className="size-3 text-slate-500" /> {region.locale}
+                                            <MapPin className="size-3 text-slate-500" /> {countryName(region.country)}
                                         </span>
                                         <div className="flex items-center gap-4">
-                                            <span className="text-emerald-400 text-xs font-black">↑ {region.growth}%</span>
-                                            <button 
-                                                onClick={() => setShowRegionWhy(showRegionWhy === region.locale ? null : region.locale)}
+                                            <span className={cn(
+                                                "text-xs font-black",
+                                                region.growth_percentage >= 0 ? "text-emerald-400" : "text-red-400"
+                                            )}>
+                                                {region.growth_percentage >= 0 ? '↑' : '↓'} {Math.abs(region.growth_percentage)}%
+                                            </span>
+                                            <button
+                                                onClick={() => setShowRegionWhy(showRegionWhy === region.country ? null : region.country)}
                                                 className="text-[9px] uppercase font-black px-2 py-1 bg-white/10 text-white rounded hover:bg-white/20 transition-colors"
                                             >
-                                                Why?
+                                                Details
                                             </button>
                                         </div>
                                     </div>
                                     <AnimatePresence>
-                                        {showRegionWhy === region.locale && (
-                                            <motion.div 
+                                        {showRegionWhy === region.country && (
+                                            <motion.div
                                                 initial={{ opacity: 0, height: 0 }}
                                                 animate={{ opacity: 1, height: 'auto' }}
                                                 exit={{ opacity: 0, height: 0 }}
                                                 className="overflow-hidden mt-2"
                                             >
                                                 <div className="p-3 bg-[#050505] rounded-lg border border-primary/20 text-xs text-primary-100 font-medium leading-relaxed">
-                                                    {region.why}
+                                                    {formatNumber(region.streams)} streams in the last 30 days
+                                                    {region.previous_streams > 0 && (
+                                                        <> (vs {formatNumber(region.previous_streams)} the previous month)</>
+                                                    )}.
                                                 </div>
                                             </motion.div>
                                         )}

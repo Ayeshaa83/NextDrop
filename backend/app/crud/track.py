@@ -1,6 +1,8 @@
+import datetime
+
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from app.models import Track
+from sqlalchemy import func, or_
+from app.models import Track, TrackCollaborator, User
 from app.schemas.track import TrackCreate, TrackUpdate
 
 def get_track_by_id(db: Session, track_id: int):
@@ -12,11 +14,23 @@ def get_tracks_by_artist(db: Session, artist_id: int, skip: int = 0, limit: int 
 def count_tracks_by_artist(db: Session, artist_id: int) -> int:
     return db.query(func.count(Track.id)).filter(Track.artist_id == artist_id).scalar()
 
+def _released_filter():
+    """Scheduled tracks stay hidden from public listings until release_date."""
+    return or_(Track.release_date.is_(None), Track.release_date <= datetime.datetime.utcnow())
+
 def get_all_public_tracks(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(Track).filter(Track.is_public == True).offset(skip).limit(limit).all()
+    return (
+        db.query(Track)
+        .filter(Track.is_public == True, _released_filter())
+        .offset(skip).limit(limit).all()
+    )
 
 def count_public_tracks(db: Session) -> int:
-    return db.query(func.count(Track.id)).filter(Track.is_public == True).scalar()
+    return (
+        db.query(func.count(Track.id))
+        .filter(Track.is_public == True, _released_filter())
+        .scalar()
+    )
 
 def create_track(db: Session, track_in: TrackCreate, artist_id: int):
     db_track = Track(
@@ -24,11 +38,29 @@ def create_track(db: Session, track_in: TrackCreate, artist_id: int):
         title=track_in.title,
         duration=track_in.duration,
         file_url=track_in.file_url,
+        cover_art_url=track_in.cover_art_url,
         genre=track_in.genre,
         bpm=track_in.bpm,
-        is_public=track_in.is_public
+        is_public=track_in.is_public,
+        isrc=track_in.isrc,
+        is_explicit=track_in.is_explicit,
+        release_date=track_in.release_date,
     )
     db.add(db_track)
+    db.flush()  # Assign track id before creating split-sheet rows
+
+    # Persist the split sheet. Names matching a registered user's artist
+    # email get linked; everyone else is stored by display name only.
+    for collab in track_in.collaborators:
+        user = db.query(User).filter(User.email == collab.name).first()
+        db.add(TrackCollaborator(
+            track_id=db_track.id,
+            user_id=user.id if user else None,
+            display_name=collab.name,
+            role=collab.role,
+            royalty_percentage=collab.royalty_percentage,
+        ))
+
     db.commit()
     db.refresh(db_track)
     return db_track

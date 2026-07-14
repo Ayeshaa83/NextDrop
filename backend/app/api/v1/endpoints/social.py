@@ -127,3 +127,36 @@ def get_leaderboard_categories():
             "Open Verse Champions"
         ]
     }
+
+
+@router.get("/leaderboard/me")
+def get_my_leaderboard_position(
+    category: str = None,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """The current artist's own rank, points, and field size."""
+    from app.crud import artist as artist_crud
+    from app.models import Leaderboard
+
+    artist = artist_crud.get_artist_by_user_id(db, user_id=current_user.id)
+    total = social_crud.count_leaderboard_entries(db, category=category)
+
+    if not artist:
+        return {"ranked": False, "total_artists": total}
+
+    query = db.query(Leaderboard).filter(Leaderboard.artist_id == artist.id)
+    if category:
+        query = query.filter(Leaderboard.category == category)
+    entry = query.order_by(Leaderboard.rank).first()
+
+    if not entry:
+        return {"ranked": False, "total_artists": total}
+
+    return {
+        "ranked": True,
+        "rank": entry.rank,
+        "points": entry.points,
+        "category": entry.category,
+        "total_artists": total,
+    }

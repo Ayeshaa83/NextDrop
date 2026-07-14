@@ -1,5 +1,5 @@
-"""App services module."""
-from .spotify import spotify_service, SpotifyService
-from .youtube import youtube_service, YouTubeService
+"""App services module.
 
-__all__ = ["spotify_service", "SpotifyService", "youtube_service", "YouTubeService"]
+Platform-specific services (Spotify/YouTube) now live in app/platforms/
+as adapters — see app/platforms/README.md.
+"""

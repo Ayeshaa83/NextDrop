@@ -33,3 +33,4 @@ class DashboardResponse(BaseModel):
     average_hit_score: Optional[float]
     top_track_id: Optional[int]
     monthly_revenue_prediction: Optional[float]
+    platform_breakdown: Optional[Dict[str, int]] = None

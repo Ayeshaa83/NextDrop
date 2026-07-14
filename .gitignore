@@ -33,6 +33,11 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
+# Local databases & uploads
+*.db
+*.sqlite3
+backend/uploads/
+
 # Misc
 .vercel
 dist/

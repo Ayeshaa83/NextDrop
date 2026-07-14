@@ -1,5 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Any
+from datetime import datetime
 from enum import Enum
 
 
@@ -15,20 +16,48 @@ class TrackBase(BaseModel):
     title: str
     duration: int  # In seconds
     file_url: str
+    cover_art_url: Optional[str] = None
     genre: Optional[str] = None
     bpm: Optional[int] = None
     is_public: bool = True
+    isrc: Optional[str] = None
+    is_explicit: bool = False
+    release_date: Optional[datetime] = None  # Null = release immediately
+
+
+class CollaboratorInput(BaseModel):
+    """A split-sheet entry. Name-only collaborators are allowed."""
+    name: str
+    role: Optional[str] = None
+    royalty_percentage: float = Field(..., ge=0, le=100)
+
 
 class TrackCreate(TrackBase):
-    pass
+    collaborators: list[CollaboratorInput] = []
+
 
 class TrackUpdate(BaseModel):
     title: Optional[str] = None
     duration: Optional[int] = None
     file_url: Optional[str] = None
+    cover_art_url: Optional[str] = None
     genre: Optional[str] = None
     bpm: Optional[int] = None
     is_public: Optional[bool] = None
+    isrc: Optional[str] = None
+    is_explicit: Optional[bool] = None
+    release_date: Optional[datetime] = None
+
+
+class CollaboratorResponse(BaseModel):
+    id: int
+    display_name: Optional[str] = None
+    role: Optional[str] = None
+    royalty_percentage: float
+
+    class Config:
+        from_attributes = True
+
 
 class TrackResponse(TrackBase):
     id: int
@@ -36,6 +65,9 @@ class TrackResponse(TrackBase):
     processing_status: ProcessingStatusEnum = ProcessingStatusEnum.PENDING
     ai_analysis: Optional[dict] = None
     processing_error: Optional[str] = None
+    approval_status: Optional[str] = None
+    approval_notes: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -35,6 +35,19 @@ class Settings(BaseSettings):
     # Simulation Mode
     DEMO_MODE: bool = True
 
+    # LLM insights (Claude API). Empty = heuristic fallbacks are used.
+    ANTHROPIC_API_KEY: str = ""
+    INSIGHTS_MODEL: str = "claude-sonnet-5"
+
+    # Email (Gmail SMTP). Empty SMTP_USER/PASSWORD = console/log mode.
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    EMAIL_FROM_NAME: str = "NextDrop"
+    # Password-reset links expire after this many minutes
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 30
+
     model_config = SettingsConfigDict(
         env_file=".env", 
         extra="ignore"  

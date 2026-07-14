@@ -1,17 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { useRequireAuth } from '@/lib/auth';
-import { useLeaderboard, formatNumber } from '@/lib/hooks';
+import { useLeaderboard, useLeaderboardCategories, useMyLeaderboardPosition, formatNumber } from '@/lib/hooks';
 import {
     Trophy,
     Crown,
-    Medal,
-    TrendingUp,
-    TrendingDown,
-    Minus,
-    ChevronRight,
-    Music2,
-    Zap,
     Star
 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -19,7 +13,10 @@ import { cn } from '@/lib/utils';
 
 export default function Leaderboard() {
     const { user, artist, isLoading: authLoading } = useRequireAuth();
-    const { data: leaderboardData, loading: leaderboardLoading } = useLeaderboard();
+    const [category, setCategory] = useState<string | undefined>(undefined);
+    const { data: leaderboardData, loading: leaderboardLoading } = useLeaderboard(category);
+    const { data: categoryData } = useLeaderboardCategories();
+    const { data: myPosition } = useMyLeaderboardPosition(category);
 
     const loading = authLoading || leaderboardLoading;
 
@@ -91,14 +88,23 @@ export default function Leaderboard() {
                     <p className="text-secondary font-black tracking-[0.2em] text-[10px] uppercase">Global Network</p>
                     <h1 className="text-4xl font-black tracking-tight text-white">Leaderboard</h1>
                 </div>
-                <div className="flex gap-2 bg-white/5 p-1 rounded-2xl border border-white/5">
-                    {["Tracks", "Artists", "Producers"].map((tab, i) => (
+                <div className="flex gap-2 bg-white/5 p-1 rounded-2xl border border-white/5 overflow-x-auto">
+                    <button
+                        onClick={() => setCategory(undefined)}
+                        className={cn(
+                            "px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                            !category ? "bg-white text-black shadow-lg" : "text-slate-500 hover:text-white"
+                        )}
+                    >
+                        All
+                    </button>
+                    {(categoryData?.categories || []).map((tab) => (
                         <button
                             key={tab}
-                            onClick={() => alert(`${tab} filtering coming to worldwide rankings soon!`)}
+                            onClick={() => setCategory(tab)}
                             className={cn(
-                                "px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
-                                i === 1 ? "bg-white text-black shadow-lg" : "text-slate-500 hover:text-white"
+                                "px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                                category === tab ? "bg-white text-black shadow-lg" : "text-slate-500 hover:text-white"
                             )}
                         >
                             {tab}
@@ -176,7 +182,6 @@ export default function Leaderboard() {
                     <div className="w-16 text-center">Rank</div>
                     <div className="flex-1">Artist</div>
                     <div className="w-32 text-right">Points</div>
-                    <div className="w-32 text-right">Trend</div>
                 </div>
 
                 {rankings.map((row, idx) => (
@@ -200,34 +205,12 @@ export default function Leaderboard() {
                         <div className="w-32 text-right pr-4">
                             <span className="text-lg font-black text-white tabular-nums">{row.points.toFixed(0)}</span>
                         </div>
-
-                        <div className="w-32 text-right flex justify-end">
-                            {idx % 3 === 0 ? (
-                                <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
-                                    <TrendingUp className="size-4" />
-                                    + {Math.floor(Math.random() * 5)}
-                                </div>
-                            ) : idx % 3 === 1 ? (
-                                <div className="flex items-center gap-1.5 text-rose-500 font-bold text-xs">
-                                    <TrendingDown className="size-4" />
-                                    - {Math.floor(Math.random() * 3)}
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-1.5 text-slate-500 font-bold text-xs">
-                                    <Minus className="size-4" />
-                                    0
-                                </div>
-                            )}
-                        </div>
                     </div>
                 ))}
 
-                <button
-                    onClick={() => alert("Calibrating remaining galaxy rankings...")}
-                    className="w-full py-5 card-premium hover:bg-white/5 border-dashed text-slate-500 hover:text-white transition-all text-xs font-black uppercase tracking-[0.3em] cursor-pointer"
-                >
-                    View Entire Galaxy
-                </button>
+                <div className="w-full py-5 card-premium border-dashed text-slate-600 text-center text-xs font-black uppercase tracking-[0.3em]">
+                    Showing top {items.length} of {formatNumber(leaderboardData?.total || items.length)} ranked artists
+                </div>
             </motion.div>
 
             {/* Sticky Footer for User Rank */}
@@ -245,18 +228,25 @@ export default function Leaderboard() {
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Your Current Rank</p>
                             <h3 className="text-2xl font-black tracking-tight text-white mt-1">
-                                #142 <span className="text-emerald-400 text-sm ml-2">▲ 12 spots</span>
+                                {myPosition?.ranked ? (
+                                    <>#{myPosition.rank}
+                                        <span className="text-slate-500 text-sm ml-2 font-bold">
+                                            of {myPosition.total_artists} ranked artists
+                                        </span>
+                                    </>
+                                ) : (
+                                    <span className="text-slate-400 text-lg">Unranked — release music to enter the rankings</span>
+                                )}
                             </h3>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="hidden sm:block text-right">
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Points</p>
-                            <p className="text-lg font-bold text-white tabular-nums">12,450</p>
+                            <p className="text-lg font-bold text-white tabular-nums">
+                                {myPosition?.ranked ? formatNumber(myPosition.points || 0) : '—'}
+                            </p>
                         </div>
-                        <button className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-black uppercase tracking-widest transition-all cursor-pointer">
-                            View Top 100
-                        </button>
                     </div>
                 </div>
             </motion.div>

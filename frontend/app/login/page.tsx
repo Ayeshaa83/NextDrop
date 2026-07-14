@@ -109,7 +109,7 @@ export default function Login() {
                                 </div>
                                 <span className="text-xs font-semibold text-slate-400 group-hover:text-white transition-colors">Remember me</span>
                             </label>
-                            <a href="#" className="text-xs font-bold text-secondary hover:text-white transition-colors hover:underline underline-offset-4">Forgot Password?</a>
+                            <Link href="/forgot-password" className="text-xs font-bold text-secondary hover:text-white transition-colors hover:underline underline-offset-4">Forgot Password?</Link>
                         </div>
 
                         <button
@@ -130,11 +130,6 @@ export default function Login() {
                             )}
                         </button>
                     </form>
-
-                    {/* Demo Credentials */}
-                    <div className="mt-6 p-3 rounded-xl bg-primary/10 border border-primary/20 text-center">
-                        <p className="text-xs text-slate-400 font-semibold">Demo: <span className="text-primary">axion@nextdrop.ai</span> / <span className="text-primary">demo1234</span></p>
-                    </div>
 
                     {/* Social Logins */}
                     <div className="mt-6 relative z-10">
@@ -161,7 +156,7 @@ export default function Login() {
                                         const { auth_url } = await spotifyApi.getLoginUrl();
                                         window.location.href = auth_url;
                                     } catch (err) {
-                                        setError('Spotify connection requires you to be logged in first. Use demo credentials.');
+                                        setError('Spotify connection requires you to be logged in first.');
                                     }
                                 }}
                                 className="py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-bold hover:bg-[#1DB954]/20 hover:border-[#1DB954]/50 hover:text-[#1DB954] transition-colors flex items-center justify-center gap-2 shadow-sm group"

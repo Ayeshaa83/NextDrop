@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import { useRequireAuth } from '@/lib/auth';
 import { useMyTracks, formatNumber, formatDuration } from '@/lib/hooks';
 import { usePlayer } from '@/lib/playerStore';
@@ -17,11 +19,14 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { DistributionModal } from '@/components/DistributionModal';
 
 export default function MusicLibrary() {
     const { user, artist, isLoading: authLoading } = useRequireAuth();
     const { data: tracks, loading: tracksLoading } = useMyTracks();
     const { playTracks, currentTrack, isPlaying } = usePlayer();
+    
+    const [distributionTrack, setDistributionTrack] = useState<{id: number, title: string} | null>(null);
 
     const loading = authLoading || tracksLoading;
 
@@ -133,10 +138,21 @@ export default function MusicLibrary() {
                 {/* Track List */}
                 {trackItems.map((track, i) => {
                     const isProcessing = track.processing_status === 'pending' || track.processing_status === 'processing';
-                    // We mock processing status for visual effect if missing
-                    const statusText = isProcessing ? 'AI Analyzing...' : 'Ready to Distribute';
-                    const statusStyle = isProcessing 
-                        ? 'text-primary bg-primary/10 border-primary/20 animate-pulse' 
+                    const isScheduled = track.release_date && new Date(track.release_date) > new Date();
+                    const isRejected = track.approval_status === 'rejected';
+                    const awaitingApproval = track.approval_status === 'pending' || track.approval_status === 'under_review';
+
+                    const statusText = isProcessing ? 'AI Analyzing...'
+                        : isRejected ? 'Rejected'
+                        : isScheduled ? `Scheduled ${new Date(track.release_date!).toLocaleDateString()}`
+                        : awaitingApproval ? 'Awaiting Approval'
+                        : 'Ready to Distribute';
+                    const statusStyle = isProcessing
+                        ? 'text-primary bg-primary/10 border-primary/20 animate-pulse'
+                        : isRejected
+                        ? 'text-red-400 bg-red-400/10 border-red-400/20'
+                        : isScheduled || awaitingApproval
+                        ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
                         : 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
 
                     return (
@@ -163,7 +179,7 @@ export default function MusicLibrary() {
                                 {/* Track Info */}
                                 <div>
                                     <h3 className="text-white font-bold group-hover:text-primary transition-colors text-sm">{track.title}</h3>
-                                    <div className="flex items-center gap-3 mt-1">
+                                    <div className="flex items-center gap-3 mt-1 flex-wrap">
                                         <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-500 uppercase tracking-widest">
                                             <Mic2 className="size-3" />
                                             {artist?.stage_name || 'Verified Artist'}
@@ -172,7 +188,28 @@ export default function MusicLibrary() {
                                         <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
                                             {track.genre || 'Single'}
                                         </div>
+                                        {track.bpm && (
+                                            <>
+                                                <div className="w-1 h-1 rounded-full bg-white/10" />
+                                                <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                                    {track.bpm} BPM
+                                                </div>
+                                            </>
+                                        )}
+                                        {track.ai_analysis?.hit_score && (
+                                            <>
+                                                <div className="w-1 h-1 rounded-full bg-white/10" />
+                                                <div className="text-[9px] font-black text-emerald-500/70 uppercase tracking-widest">
+                                                    ✦ {Math.round(track.ai_analysis.hit_score)}% Hit
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
+                                    {isRejected && track.approval_notes && (
+                                        <p className="text-[10px] text-red-300/80 font-medium mt-1.5 max-w-md">
+                                            Reason: {track.approval_notes}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -186,14 +223,29 @@ export default function MusicLibrary() {
                                     {formatDuration(track.duration || 0)}
                                 </span>
 
-                                <button className="text-slate-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100 p-1">
-                                    <MoreVertical className="size-4" />
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDistributionTrack({ id: track.id, title: track.title });
+                                    }}
+                                    className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-primary text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all opacity-0 group-hover:opacity-100"
+                                >
+                                    Distribute
                                 </button>
                             </div>
                         </motion.div>
                     );
                 })}
             </div>
+
+            {distributionTrack && (
+                <DistributionModal
+                    isOpen={!!distributionTrack}
+                    onClose={() => setDistributionTrack(null)}
+                    trackId={distributionTrack.id}
+                    trackTitle={distributionTrack.title}
+                />
+            )}
         </motion.div>
     );
 }

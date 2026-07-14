@@ -33,6 +33,8 @@ export interface Artist {
   stage_name: string;
   bio: string | null;
   profile_picture: string | null;
+  is_verified?: boolean;
+  approval_status?: 'pending' | 'approved' | 'rejected';
 }
 
 export interface Track {
@@ -45,8 +47,34 @@ export interface Track {
   bpm: number | null;
   cover_art_url?: string | null;
   is_public: boolean;
+  isrc?: string | null;
+  is_explicit?: boolean;
+  release_date?: string | null;
+  approval_status?: string | null;
+  approval_notes?: string | null;
+  created_at?: string | null;
   processing_status?: string;
   ai_analysis?: AIAnalysisResponse | null;
+}
+
+export interface CollaboratorInput {
+  name: string;
+  role?: string;
+  royalty_percentage: number;
+}
+
+export interface TrackCreatePayload {
+  title: string;
+  duration: number;
+  file_url: string;
+  cover_art_url?: string | null;
+  genre?: string | null;
+  bpm?: number | null;
+  is_public?: boolean;
+  isrc?: string | null;
+  is_explicit?: boolean;
+  release_date?: string | null;
+  collaborators?: CollaboratorInput[];
 }
 
 export interface TrackProcessingStatus {
@@ -89,6 +117,7 @@ export interface DashboardData {
   average_hit_score: number | null;
   top_track_id: number | null;
   monthly_revenue_prediction: number | null;
+  platform_breakdown?: Record<string, number>;
 }
 
 export interface RevenuePrediction {
@@ -200,6 +229,20 @@ export const authApi = {
   async getCurrentUser(): Promise<User> {
     return apiFetch<User>('/api/v1/auth/me');
   },
+
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>('/api/v1/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+  },
 };
 
 // ============ ARTIST API ============
@@ -247,7 +290,7 @@ export const tracksApi = {
     return apiFetch<Track>(`/api/v1/tracks/${trackId}`);
   },
 
-  async createTrack(data: Omit<Track, 'id' | 'artist_id'>): Promise<Track> {
+  async createTrack(data: TrackCreatePayload): Promise<Track> {
     return apiFetch<Track>('/api/v1/tracks/', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -324,7 +367,45 @@ export const analyticsApi = {
       method: 'POST',
     });
   },
+
+  async getTimeseries(days = 30): Promise<TimeseriesData> {
+    return apiFetch<TimeseriesData>(`/api/v1/analytics/timeseries?days=${days}`);
+  },
+
+  async getTerritories(): Promise<TerritoriesData> {
+    return apiFetch<TerritoriesData>('/api/v1/analytics/territories');
+  },
+
+  async refreshPlatforms(trackId: number): Promise<TrackAnalytics> {
+    return apiFetch<TrackAnalytics>(`/api/v1/analytics/tracks/${trackId}/refresh-platforms`, {
+      method: 'POST',
+    });
+  },
 };
+
+export interface TimeseriesPoint {
+  date: string;
+  total: number;
+  youtube?: number;
+  spotify?: number;
+  other?: number;
+}
+
+export interface TimeseriesData {
+  days: number;
+  points: TimeseriesPoint[];
+}
+
+export interface TerritoryStat {
+  country: string;
+  streams: number;
+  previous_streams: number;
+  growth_percentage: number;
+}
+
+export interface TerritoriesData {
+  territories: TerritoryStat[];
+}
 
 // ============ SOCIAL API ============
 
@@ -360,7 +441,20 @@ export const socialApi = {
   async getLeaderboardCategories(): Promise<{ categories: string[] }> {
     return apiFetch<{ categories: string[] }>('/api/v1/social/leaderboard/categories');
   },
+
+  async getMyLeaderboardPosition(category?: string): Promise<MyLeaderboardPosition> {
+    const params = category ? `?category=${encodeURIComponent(category)}` : '';
+    return apiFetch<MyLeaderboardPosition>(`/api/v1/social/leaderboard/me${params}`);
+  },
 };
+
+export interface MyLeaderboardPosition {
+  ranked: boolean;
+  rank?: number;
+  points?: number;
+  category?: string;
+  total_artists: number;
+}
 // ============ STORAGE API ============
 
 export interface UploadUrlRequest {
@@ -413,6 +507,31 @@ export const storageApi = {
       method: 'DELETE',
       body: JSON.stringify(data),
     });
+  },
+
+  /**
+   * Full upload flow: request a presigned URL, then PUT the file to it.
+   * Works both in local-mock mode and against S3/R2.
+   * Returns the permanent file_url to store on the track.
+   */
+  async uploadFile(file: File, category: 'tracks' | 'covers' | 'avatars', trackId?: number): Promise<{ file_key: string; file_url: string }> {
+    const presign = await this.getUploadUrl({
+      filename: file.name,
+      content_type: file.type || undefined,
+      category,
+      track_id: trackId,
+    });
+
+    const res = await fetch(presign.upload_url, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    });
+    if (!res.ok) {
+      throw new ApiError(res.status, 'File upload failed');
+    }
+
+    return { file_key: presign.file_key, file_url: presign.file_url };
   },
 };
 
@@ -485,7 +604,121 @@ export const adminApi = {
       method: 'PUT',
     });
   },
+
+  async getPayouts(skip = 0, limit = 50, status?: string): Promise<PaginatedResponse<AdminPayout>> {
+    const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+    if (status) params.append('status_filter', status);
+    return apiFetch<PaginatedResponse<AdminPayout>>(`/api/v1/admin/payouts?${params}`);
+  },
+
+  async updatePayoutStatus(payoutId: number, newStatus: 'completed' | 'rejected'): Promise<AdminPayout> {
+    return apiFetch<AdminPayout>(`/api/v1/admin/payouts/${payoutId}/status?new_status=${newStatus}`, {
+      method: 'PUT',
+    });
+  },
+
+  async getArtists(skip = 0, limit = 50): Promise<PaginatedResponse<AdminArtist>> {
+    return apiFetch<PaginatedResponse<AdminArtist>>(`/api/v1/admin/artists?skip=${skip}&limit=${limit}`);
+  },
+
+  async setArtistVerification(artistId: number, verified: boolean): Promise<AdminArtist> {
+    return apiFetch<AdminArtist>(`/api/v1/admin/artists/${artistId}/verify?verified=${verified}`, {
+      method: 'PUT',
+    });
+  },
+
+  async setArtistApproval(artistId: number, approval: 'approved' | 'rejected', notes?: string): Promise<AdminArtist> {
+    const params = new URLSearchParams({ approval });
+    if (notes) params.append('notes', notes);
+    return apiFetch<AdminArtist>(`/api/v1/admin/artists/${artistId}/approval?${params}`, {
+      method: 'PUT',
+    });
+  },
+
+  async getPlatformConfigs(): Promise<PlatformConfig[]> {
+    return apiFetch<PlatformConfig[]>('/api/v1/admin/platforms');
+  },
+
+  async createPlatformConfig(data: PlatformConfigInput): Promise<PlatformConfig> {
+    return apiFetch<PlatformConfig>('/api/v1/admin/platforms', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updatePlatformConfig(configId: number, data: PlatformConfigInput): Promise<PlatformConfig> {
+    return apiFetch<PlatformConfig>(`/api/v1/admin/platforms/${configId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deletePlatformConfig(configId: number): Promise<void> {
+    return apiFetch<void>(`/api/v1/admin/platforms/${configId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getPlatformAnalytics(days = 30): Promise<PlatformAnalytics> {
+    return apiFetch<PlatformAnalytics>(`/api/v1/admin/analytics?days=${days}`);
+  },
 };
+
+export interface AdminPayout {
+  id: number;
+  user_id: number;
+  user_email: string | null;
+  amount: number;
+  method: string;
+  status: 'processing' | 'completed' | 'rejected';
+  reference: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+}
+
+export interface AdminArtist {
+  id: number;
+  user_id: number;
+  stage_name: string;
+  user_email: string | null;
+  approval_status: 'pending' | 'approved' | 'rejected';
+  approval_reviewed_at: string | null;
+  is_verified: boolean;
+  verified_at: string | null;
+  track_count: number;
+}
+
+export interface PlatformConfig {
+  id: number;
+  platform_id: string;
+  display_name: string;
+  description: string;
+  color: string;
+  category: 'music' | 'video' | 'social';
+  enabled: boolean;
+  has_adapter: boolean;
+}
+
+export interface PlatformConfigInput {
+  platform_id: string;
+  display_name: string;
+  description?: string;
+  color?: string;
+  category?: string;
+  enabled?: boolean;
+}
+
+export interface PlatformAnalyticsPoint {
+  date: string;
+  signups: number;
+  uploads: number;
+}
+
+export interface PlatformAnalytics {
+  days: number;
+  points: PlatformAnalyticsPoint[];
+  approval_funnel: Record<string, number>;
+}
 
 // ============ SPOTIFY OAUTH API ============
 
@@ -608,6 +841,229 @@ export const youtubeApi = {
 
   async getRecentVideos(maxResults = 10): Promise<YouTubeVideosResponse> {
     return apiFetch<YouTubeVideosResponse>(`/api/v1/youtube/videos?max_results=${maxResults}`);
+  },
+};
+
+// ============ INTEGRATIONS API ============
+
+export interface PlatformStatus {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  category: 'video' | 'music' | 'social';
+  available: boolean;
+  connected: boolean;
+  login_endpoint: string | null;
+  disconnect_endpoint: string | null;
+  display_name: string | null;
+  profile_image_url: string | null;
+  expires_at: string | null;
+  token_expired: boolean;
+}
+
+export interface IntegrationsOverview {
+  platforms: PlatformStatus[];
+  connected_count: number;
+  total_available: number;
+}
+
+export interface IntegrationsSummary {
+  connected: string[];
+  count: number;
+}
+
+export const integrationsApi = {
+  /** Returns all platforms with live connected/disconnected status. */
+  async getAll(): Promise<IntegrationsOverview> {
+    return apiFetch<IntegrationsOverview>('/api/v1/integrations/');
+  },
+
+  /** Lightweight — just which platform IDs are connected. */
+  async getSummary(): Promise<IntegrationsSummary> {
+    return apiFetch<IntegrationsSummary>('/api/v1/integrations/summary');
+  },
+
+  /**
+   * Initiate OAuth connect for any platform.
+   * Calls the platform's login endpoint to get an auth URL, then redirects.
+   */
+  async connect(loginEndpoint: string): Promise<void> {
+    const data = await apiFetch<{ auth_url: string }>(loginEndpoint);
+    window.location.href = data.auth_url;
+  },
+
+  /**
+   * Disconnect a platform using its disconnect endpoint.
+   */
+  async disconnect(disconnectEndpoint: string): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>(disconnectEndpoint, { method: 'DELETE' });
+  },
+};
+
+
+// ============ EARNINGS & PAYOUTS API ============
+
+export interface TrackEarnings {
+  track_id: number;
+  title: string;
+  spotify_streams: number;
+  youtube_views: number;
+  other_streams: number;
+  spotify_revenue: number;
+  youtube_revenue: number;
+  other_revenue: number;
+  gross_revenue: number;
+  royalty_share: number;
+  net_revenue: number;
+}
+
+export interface EarningsSummary {
+  tracks: TrackEarnings[];
+  lifetime_gross: number;
+  lifetime_net: number;
+  platform_totals: Record<string, number>;
+}
+
+export interface WalletData {
+  balance: number;
+  lifetime_earnings: number;
+  withdrawn: number;
+  pending_payouts: number;
+}
+
+export interface PayoutRecord {
+  id: number;
+  amount: number;
+  method: string;
+  status: 'processing' | 'completed' | 'rejected';
+  reference: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export const earningsApi = {
+  async getSummary(): Promise<EarningsSummary> {
+    return apiFetch<EarningsSummary>('/api/v1/earnings/summary');
+  },
+
+  async getWallet(): Promise<WalletData> {
+    return apiFetch<WalletData>('/api/v1/earnings/wallet');
+  },
+
+  async withdraw(amount: number, method = 'bank_transfer'): Promise<PayoutRecord> {
+    return apiFetch<PayoutRecord>('/api/v1/earnings/withdraw', {
+      method: 'POST',
+      body: JSON.stringify({ amount, method }),
+    });
+  },
+
+  async getPayouts(): Promise<PayoutRecord[]> {
+    return apiFetch<PayoutRecord[]>('/api/v1/earnings/payouts');
+  },
+
+  /** Downloads the CSV statement via a blob (cookie-authenticated). */
+  async downloadStatement(): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/earnings/statement`, {
+      credentials: 'include',
+    });
+    if (!res.ok) throw new ApiError(res.status, 'Failed to download statement');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nextdrop_statement_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+};
+
+// ============ NOTIFICATIONS API ============
+
+export type NotificationType =
+  | 'track_approved' | 'track_rejected'
+  | 'artist_approved' | 'artist_rejected'
+  | 'payout_completed' | 'payout_rejected'
+  | 'verification_granted' | 'collab_request';
+
+export interface AppNotification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  body: string;
+  link: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export const notificationsApi = {
+  async getAll(skip = 0, limit = 20): Promise<PaginatedResponse<AppNotification>> {
+    return apiFetch<PaginatedResponse<AppNotification>>(`/api/v1/notifications/?skip=${skip}&limit=${limit}`);
+  },
+
+  async getUnreadCount(): Promise<{ unread_count: number }> {
+    return apiFetch<{ unread_count: number }>('/api/v1/notifications/unread-count');
+  },
+
+  async markRead(notificationId: number): Promise<AppNotification> {
+    return apiFetch<AppNotification>(`/api/v1/notifications/${notificationId}/read`, {
+      method: 'PUT',
+    });
+  },
+
+  async markAllRead(): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>('/api/v1/notifications/read-all', {
+      method: 'PUT',
+    });
+  },
+};
+
+// ============ DISTRIBUTION API ============
+
+export interface TrackDistributionStatus {
+  id: number;
+  track_id: number;
+  platform: string;
+  status: 'pending' | 'processing' | 'live' | 'failed' | 'removed';
+  platform_track_id: string | null;
+  platform_url: string | null;
+  error_message: string | null;
+  territories: string[] | null;
+  distributed_at: string | null;
+}
+
+export interface DistributionPlatform {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  category: string;
+  supports_distribution: boolean;
+  connected: boolean;
+  login_endpoint: string | null;
+}
+
+export const distributionApi = {
+  async getPlatforms(): Promise<DistributionPlatform[]> {
+    return apiFetch<DistributionPlatform[]>('/api/v1/distribution/platforms');
+  },
+
+  async distribute(trackId: number, platformId: string, territories?: string[] | null, options?: Record<string, unknown>): Promise<TrackDistributionStatus> {
+    return apiFetch<TrackDistributionStatus>('/api/v1/distribution/', {
+      method: 'POST',
+      body: JSON.stringify({
+        track_id: trackId,
+        platform_id: platformId,
+        territories: territories && territories.length > 0 ? territories : null,
+        options: options || {},
+      }),
+    });
+  },
+
+  async getTrackDistributions(trackId: number): Promise<TrackDistributionStatus[]> {
+    return apiFetch<TrackDistributionStatus[]>(`/api/v1/distribution/track/${trackId}`);
   },
 };
 

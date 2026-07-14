@@ -3,11 +3,13 @@ import { useRef, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUploadStore } from '@/lib/uploadStore';
 import AudioDNARadar from '@/components/ai/AudioDNARadar';
-import { analyzeApi, tracksApi } from '@/lib/api';
+import AIMetadataSuggestor from '@/components/ai/AIMetadataSuggestor';
+import { analyzeApi, tracksApi, storageApi, ApiError } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     UploadCloud, Sparkles, ChevronRight, Loader2,
-    Music, Hash, Tag, Users, ShieldAlert, Plus, Trash2, Shield, FileAudio, CheckCircle2
+    Music, Hash, Tag, Users, ShieldAlert, Plus, Trash2, Shield, FileAudio, CheckCircle2,
+    Image as ImageIcon, CalendarClock, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRequireAuth } from '@/lib/auth';
@@ -65,10 +67,15 @@ const ShimmerOverlay = ({ analyzing }: { analyzing?: boolean }) => (
 );
 
 export default function UploadReleasePage() {
-    useRequireAuth();
+    const { artist, isLoading: authLoading } = useRequireAuth();
     const store = useUploadStore();
     const fileRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
+
+    // Gate flag: artists must pass admin onboarding approval before uploading.
+    // (The gate renders below, after all hooks, to keep hook order stable.)
+    const approvalStatus = artist?.approval_status ?? 'approved';
+    const approvalBlocked = !authLoading && !!artist && approvalStatus !== 'approved';
 
     const totalPercentage = store.collaborators.reduce((sum, c) => sum + (Number(c.percentage) || 0), 0);
     const isValidSplit = totalPercentage === 100;
@@ -112,26 +119,86 @@ export default function UploadReleasePage() {
     }, [store.step, store.file]);
 
     const [isPublishing, setIsPublishing] = useState(false);
+    const [publishError, setPublishError] = useState<string | null>(null);
+    const [publishSuccess, setPublishSuccess] = useState(false);
+
+    // Real audio duration, extracted client-side from the file's metadata
+    const [duration, setDuration] = useState<number | null>(null);
+    // Optional artwork + release scheduling
+    const coverRef = useRef<HTMLInputElement>(null);
+    const [coverFile, setCoverFile] = useState<File | null>(null);
+    const [coverPreview, setCoverPreview] = useState<string | null>(null);
+    const [releaseDate, setReleaseDate] = useState<string>('');
+
+    const extractDuration = (f: File) => {
+        const url = URL.createObjectURL(f);
+        const audio = new Audio();
+        audio.preload = 'metadata';
+        audio.onloadedmetadata = () => {
+            if (Number.isFinite(audio.duration)) {
+                setDuration(Math.round(audio.duration));
+            }
+            URL.revokeObjectURL(url);
+        };
+        audio.onerror = () => URL.revokeObjectURL(url);
+        audio.src = url;
+    };
+
+    const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const f = e.target.files?.[0];
+        if (f && f.type.startsWith('image/')) {
+            setCoverFile(f);
+            setCoverPreview(URL.createObjectURL(f));
+        }
+    };
 
     const handlePublish = async () => {
-        if (!isValidSplit) return;
+        if (!isValidSplit || !store.file) return;
         setIsPublishing(true);
+        setPublishError(null);
         try {
+            // 1. Upload the audio file (presigned flow; local-mock or S3)
+            const audioUpload = await storageApi.uploadFile(store.file, 'tracks');
+
+            // 2. Upload artwork if provided
+            let coverArtUrl: string | null = null;
+            if (coverFile) {
+                const coverUpload = await storageApi.uploadFile(coverFile, 'covers');
+                coverArtUrl = coverUpload.file_url;
+            }
+
+            // 3. Create the track with real metadata
             await tracksApi.createTrack({
                 title: store.profMeta.title,
                 genre: store.metadata.genre,
-                duration: 180, // Mocked for now
-                file_url: 's3://mock/' + store.file?.name
+                duration: duration ?? 0,
+                file_url: audioUpload.file_url,
+                cover_art_url: coverArtUrl,
+                bpm: store.metadata.bpm ? Number(store.metadata.bpm) : null,
+                is_public: false, // Stays private until admin approval
+                isrc: store.profMeta.isrc || null,
+                is_explicit: store.profMeta.explicit,
+                release_date: releaseDate ? new Date(releaseDate).toISOString() : null,
+                collaborators: store.collaborators
+                    .filter(c => c.name.trim())
+                    .map(c => ({ name: c.name.trim(), royalty_percentage: Number(c.percentage) || 0 })),
             });
+
+            setPublishSuccess(true);
             // Show brief success before resetting
             setTimeout(() => {
                 setIsPublishing(false);
+                setPublishSuccess(false);
+                setCoverFile(null);
+                setCoverPreview(null);
+                setReleaseDate('');
+                setDuration(null);
                 store.reset();
+                router.push('/music');
             }, 1500);
         } catch (error) {
-            console.error("Failed to publish", error);
+            setPublishError(error instanceof ApiError ? error.message : 'Failed to publish the release. Please try again.');
             setIsPublishing(false);
-            store.reset(); // Still reset on fail for loop
         }
     };
 
@@ -140,14 +207,42 @@ export default function UploadReleasePage() {
         const f = e.dataTransfer.files[0];
         if (f && f.type.startsWith('audio/')) {
             store.setFile(f);
+            extractDuration(f);
             store.setStep('decoding');
         }
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const f = e.target.files?.[0];
-        if(f) { store.setFile(f); store.setStep('decoding'); }
+        if(f) { store.setFile(f); extractDuration(f); store.setStep('decoding'); }
     };
+
+    if (approvalBlocked) {
+        const rejected = approvalStatus === 'rejected';
+        return (
+            <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-8">
+                <div className="max-w-lg w-full text-center card-premium p-12 space-y-5 border border-white/5">
+                    <div className={cn(
+                        "size-16 rounded-2xl mx-auto flex items-center justify-center",
+                        rejected ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400"
+                    )}>
+                        <Shield className="size-8" />
+                    </div>
+                    <h1 className="text-2xl font-black text-white">
+                        {rejected ? 'Artist profile not approved' : 'Admin approval pending'}
+                    </h1>
+                    <p className="text-sm text-slate-400 font-medium leading-relaxed">
+                        {rejected
+                            ? 'Your artist profile was not approved by our admins. Please contact support for details.'
+                            : 'Your artist profile is being reviewed by our admins. You’ll receive an email as soon as it’s approved — then you can upload and distribute your music.'}
+                    </p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+                        Meanwhile you can explore the platform, browse the Jam Jar, and check the leaderboard.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#050505] text-white py-12 px-6 lg:px-10 max-w-[1500px] mx-auto overflow-hidden relative font-sans">
@@ -258,9 +353,23 @@ export default function UploadReleasePage() {
                     {/* A. AI Metadata */}
                     <section className="p-8 rounded-3xl border border-white/[0.04] bg-[#0a0a0b]/40 backdrop-blur-md relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-3xl rounded-full pointer-events-none" />
-                        <div className="flex items-center gap-3 border-b border-primary/10 pb-4 mb-6">
-                            <Sparkles className="size-4 text-primary" />
-                            <h3 className="text-xs font-black uppercase tracking-widest text-primary">Smart-Fill Metadata</h3>
+                        <div className="flex items-center justify-between gap-3 border-b border-primary/10 pb-4 mb-6">
+                            <div className="flex items-center gap-3">
+                                <Sparkles className="size-4 text-primary" />
+                                <h3 className="text-xs font-black uppercase tracking-widest text-primary">Smart-Fill Metadata</h3>
+                            </div>
+                            <AIMetadataSuggestor
+                                title={store.profMeta.title || store.file?.name?.replace(/\.[^/.]+$/, '') || ''}
+                                disabled={isAnalyzing || !store.file}
+                                onSuggest={(s) => {
+                                    store.setMetadata({
+                                        genre: s.genre,
+                                        mood: s.mood,
+                                        bpm: String(s.bpm),
+                                        key: s.key,
+                                    });
+                                }}
+                            />
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
                             <FormInput label="Genre" value={store.metadata.genre} onChange={v => store.setMetadata({ genre: v })} icon={Music} aiFilled disabled={isAnalyzing} />
@@ -282,6 +391,58 @@ export default function UploadReleasePage() {
                                 <FormInput label="ISRC Code" value={store.profMeta.isrc} onChange={v => store.setProfMeta({ isrc: v })} icon={Hash} placeholder="US-XXX-XX-XXXXX" disabled={isAnalyzing} />
                                 <FormToggle label="Explicit Content" value={store.profMeta.explicit} onChange={v => store.setProfMeta({ explicit: v })} disabled={isAnalyzing} />
                             </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                                {/* Cover Artwork */}
+                                <div className={cn("space-y-2", isAnalyzing && "opacity-50 pointer-events-none")}>
+                                    <label className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                                        <ImageIcon className="size-3 text-slate-600" />
+                                        Cover Artwork <span className="tracking-normal normal-case font-medium text-slate-600">(optional)</span>
+                                    </label>
+                                    <input ref={coverRef} type="file" accept="image/*" className="hidden" onChange={handleCoverChange} disabled={isAnalyzing} />
+                                    {coverPreview ? (
+                                        <div className="relative w-full h-[52px] rounded-xl border border-white/[0.06] bg-[#070708] flex items-center gap-3 px-3">
+                                            <img src={coverPreview} className="size-9 rounded-lg object-cover" alt="Cover preview" />
+                                            <span className="text-xs font-bold text-white truncate flex-1">{coverFile?.name}</span>
+                                            <button
+                                                onClick={() => { setCoverFile(null); setCoverPreview(null); }}
+                                                className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                            >
+                                                <X className="size-4" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => coverRef.current?.click()}
+                                            className="w-full h-[52px] rounded-xl border border-dashed border-white/10 bg-[#070708] text-slate-500 hover:text-primary hover:border-primary/30 transition-colors text-xs font-bold flex items-center justify-center gap-2"
+                                        >
+                                            <Plus className="size-4" /> Add Artwork
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Release Scheduling */}
+                                <div className={cn("space-y-2", isAnalyzing && "opacity-50 pointer-events-none")}>
+                                    <label className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                                        <CalendarClock className="size-3 text-slate-600" />
+                                        Scheduled Release <span className="tracking-normal normal-case font-medium text-slate-600">(blank = release now)</span>
+                                    </label>
+                                    <input
+                                        type="datetime-local"
+                                        value={releaseDate}
+                                        onChange={e => setReleaseDate(e.target.value)}
+                                        min={new Date().toISOString().slice(0, 16)}
+                                        disabled={isAnalyzing}
+                                        className="w-full h-[52px] bg-[#070708] border border-white/[0.06] rounded-xl px-5 text-white focus:outline-none focus:border-primary/50 text-sm font-bold transition-all [color-scheme:dark]"
+                                    />
+                                </div>
+                            </div>
+
+                            {duration !== null && (
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-600">
+                                    Detected duration: {Math.floor(duration / 60)}:{String(duration % 60).padStart(2, '0')}
+                                </p>
+                            )}
                         </div>
                     </section>
 
@@ -339,12 +500,14 @@ export default function UploadReleasePage() {
                                 </div>
 
                                 <div className="w-full md:w-auto flex-1 md:flex-none flex flex-col items-center gap-3">
-                                    <button 
+                                    <button
                                         disabled={!isValidSplit || isPublishing}
                                         onClick={handlePublish}
                                         className="w-full md:w-80 py-4 bg-white text-black font-black uppercase tracking-[0.2em] rounded-2xl hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] flex items-center justify-center gap-3 disabled:opacity-20 disabled:scale-100 disabled:cursor-not-allowed cursor-pointer"
                                     >
-                                        {isPublishing ? (
+                                        {publishSuccess ? (
+                                            <>Deployed <CheckCircle2 className="size-5 text-emerald-600" /></>
+                                        ) : isPublishing ? (
                                             <>Deploying... <Loader2 className="size-5 animate-spin" /></>
                                         ) : (
                                             <>Deploy the Drop <ChevronRight className="size-5" /></>
@@ -353,6 +516,16 @@ export default function UploadReleasePage() {
                                     {!isValidSplit && (
                                         <p className="text-[9px] uppercase font-black tracking-widest text-red-500">
                                             Error: Split must exactly equal 100%. (Current: {totalPercentage}%)
+                                        </p>
+                                    )}
+                                    {publishError && (
+                                        <p className="text-[9px] uppercase font-black tracking-widest text-red-500 text-center max-w-80">
+                                            {publishError}
+                                        </p>
+                                    )}
+                                    {releaseDate && (
+                                        <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">
+                                            Scheduled for {new Date(releaseDate).toLocaleString()}
                                         </p>
                                     )}
                                 </div>

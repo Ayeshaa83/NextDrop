@@ -56,7 +56,11 @@ class DeleteFileRequest(BaseModel):
 
 import uuid
 import os
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import Request
+
+# Resolve uploads directory relative to this file (portable, cross-platform)
+_HERE = os.path.dirname(os.path.abspath(__file__))
+LOCAL_UPLOADS_DIR = os.path.abspath(os.path.join(_HERE, "..", "..", "..", "..", "uploads"))
 
 @router.post("/upload-url", response_model=UploadUrlResponse, status_code=status.HTTP_200_OK)
 async def generate_upload_url(
@@ -73,19 +77,26 @@ async def generate_upload_url(
         if not storage.config.access_key_id or storage.config.access_key_id == "":
             # LOCAL MOCK MODE
             unique_id = uuid.uuid4().hex[:8]
-            file_key = f"{request.category}/{current_artist.id}/{unique_id}_{request.filename}"
+            # Keep filename filesystem-safe
+            safe_name = os.path.basename(request.filename).replace(" ", "_")
+            file_key = f"{request.category}/{current_artist.id}/{unique_id}_{safe_name}"
             # Return a URL that points back to our own API
             base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
             upload_url = f"{base_url}/api/v1/storage/upload/{file_key}"
             file_url = f"{base_url}/api/v1/storage/local/{file_key}"
-            
+
+            if request.category == "tracks":
+                allowed = ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp3", "audio/flac", "audio/ogg"]
+            else:  # covers / avatars
+                allowed = ["image/jpeg", "image/png", "image/webp"]
+
             return UploadUrlResponse(
                 upload_url=upload_url,
                 file_key=file_key,
                 file_url=file_url,
                 expires_in=3600,
                 max_size_bytes=100 * 1024 * 1024,
-                allowed_content_types=["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp3"]
+                allowed_content_types=allowed
             )
 
         result = storage.generate_upload_url(
@@ -125,7 +136,7 @@ async def local_file_upload(
     request: Request
 ):
     """Handle local file upload when S3 is not configured."""
-    upload_dir = os.path.join("d:\\NextDrop\\backend", "uploads", category, str(artist_id))
+    upload_dir = os.path.join(LOCAL_UPLOADS_DIR, category, str(artist_id))
     os.makedirs(upload_dir, exist_ok=True)
     
     file_path = os.path.join(upload_dir, filename)
@@ -135,9 +146,19 @@ async def local_file_upload(
     return {"status": "success", "file_path": file_path}
 
 @router.get("/local/{category}/{artist_id}/{filename}")
-async def get_local_file_url(category: str, artist_id: int, filename: str):
-    """Return the local file path for background tasks."""
-    return {"file_path": os.path.join("d:\\NextDrop\\backend", "uploads", category, str(artist_id), filename)}
+async def serve_local_file(category: str, artist_id: int, filename: str):
+    """Stream a locally stored file (audio playback, artwork, distribution)."""
+    import mimetypes
+    from fastapi.responses import FileResponse
+
+    # Prevent path traversal
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(LOCAL_UPLOADS_DIR, category, str(artist_id), safe_name)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    media_type = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+    return FileResponse(file_path, media_type=media_type)
 
 
 @router.post("/download-url", response_model=DownloadUrlResponse, status_code=status.HTTP_200_OK)

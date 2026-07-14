@@ -1,4 +1,4 @@
-from sqlalchemy import String, ForeignKey, Integer, DateTime, Enum, JSON
+from sqlalchemy import String, ForeignKey, Integer, DateTime, Enum, JSON, Text
 from sqlalchemy import text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -55,10 +55,18 @@ class Track(Base):
     title: Mapped[str] = mapped_column(String(200), index=True)
     duration: Mapped[int] = mapped_column(Integer) # In seconds
     file_url: Mapped[str] = mapped_column(String)
+    cover_art_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     genre: Mapped[str] = mapped_column(String(50), nullable=True)
     bpm: Mapped[int] = mapped_column(Integer, nullable=True)
     is_public: Mapped[bool] = mapped_column(default=True)
-    
+
+    # Release metadata
+    isrc: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    is_explicit: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    # Scheduled release: null = released immediately; future date = hidden
+    # from public listings until the date passes.
+    release_date: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+
     # Async processing fields
     processing_status: Mapped[str] = mapped_column(
         String(20), 
@@ -78,6 +86,8 @@ class Track(Base):
     approved_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     approved_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
 
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now())
+
     artist: Mapped["Artist"] = relationship(back_populates="tracks")
     albums: Mapped[list["Album"]] = relationship(secondary="album_tracks", back_populates="tracks")
     
@@ -91,9 +101,65 @@ class TrackCollaborator(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"))
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    # Nullable: external collaborators (no NextDrop account) are stored by name only.
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     royalty_percentage: Mapped[float] = mapped_column(default=100.0)
     role: Mapped[str] = mapped_column(String(50), nullable=True) # e.g. "Producer", "Lyricist"
 
     track: Mapped["Track"] = relationship(back_populates="split_sheets")
     user: Mapped["User"] = relationship()
+
+
+class DistributionStatus(str, enum.Enum):
+    """Lifecycle status for a track distributed to a platform."""
+    PENDING = "pending"         # Queued, not yet submitted
+    PROCESSING = "processing"   # Upload in progress
+    LIVE = "live"               # Publicly available on platform
+    FAILED = "failed"           # Upload or processing error
+    REMOVED = "removed"         # Taken down from platform
+
+
+class TrackDistribution(Base):
+    """
+    Records which tracks have been distributed to which platforms.
+
+    Each row = one (track, platform) pair.
+    Stores the external platform ID (e.g. YouTube video ID) so we can later
+    fetch per-track analytics from that platform.
+    """
+    __tablename__ = "track_distributions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
+    artist_id: Mapped[int] = mapped_column(ForeignKey("artists.id"), index=True)
+
+    # Platform identifier — must match the platform registry key
+    platform: Mapped[str] = mapped_column(String(50), index=True)  # "youtube", "spotify", etc.
+
+    # External identifier assigned by the platform after successful upload
+    platform_track_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    platform_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    # Distribution lifecycle
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default=DistributionStatus.PENDING.value,
+        index=True,
+    )
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Platform-specific metadata (title used, privacy setting, tags, etc.)
+    platform_metadata: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+
+    # Selected territories (list of ISO country codes). Null/empty = worldwide.
+    territories: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+
+    distributed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    track: Mapped["Track"] = relationship()

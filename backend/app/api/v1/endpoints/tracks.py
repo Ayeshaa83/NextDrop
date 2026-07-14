@@ -130,6 +130,25 @@ def get_current_artist_id(db: Session, current_user: User):
         )
     return artist.id
 
+
+def require_approved_artist(db: Session, current_user: User):
+    """Artists must pass admin onboarding approval before uploading."""
+    from app.models import ArtistApprovalStatus
+
+    artist = artist_crud.get_artist_by_user_id(db, user_id=current_user.id)
+    if not artist:
+        raise HTTPException(
+            status_code=400,
+            detail="You need to create an artist profile first"
+        )
+    if artist.approval_status != ArtistApprovalStatus.APPROVED.value:
+        raise HTTPException(
+            status_code=403,
+            detail="Your artist profile is awaiting admin approval. "
+                   "You'll be able to upload music once it's approved.",
+        )
+    return artist
+
 @router.post("/", response_model=TrackResponse, status_code=status.HTTP_201_CREATED)
 def create_track(
     track_in: TrackCreate,
@@ -140,12 +159,12 @@ def create_track(
     """
     Upload a new track.
     
-    The track is saved immediately with status='pending' and 
+    The track is saved immediately with status='pending' and
     AI analysis runs in the background. Use GET /tracks/{id}/status
     to check processing progress.
     """
-    artist_id = get_current_artist_id(db, current_user)
-    track = track_crud.create_track(db, track_in=track_in, artist_id=artist_id)
+    artist = require_approved_artist(db, current_user)
+    track = track_crud.create_track(db, track_in=track_in, artist_id=artist.id)
     
     # Queue background processing
     background_tasks.add_task(process_track_analysis, track.id)

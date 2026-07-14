@@ -11,8 +11,9 @@ import httpx
 
 from app.api import deps
 from app.models import User, SocialAccount, SocialStats
-from app.services.youtube import youtube_service
+from app.platforms.registry import registry
 from app.sec.config import settings
+from app.sec.encryption import encrypt_token, decrypt_token
 
 
 router = APIRouter()
@@ -52,10 +53,12 @@ def youtube_login(
     Get YouTube/Google OAuth authorization URL.
     User must be logged in to connect YouTube.
     """
-    # Generate state parameter with user ID for CSRF protection
     state = f"user_{current_user.id}"
-    auth_url = youtube_service.get_auth_url(state=state)
+    youtube = registry.get_adapter("youtube")
+    if not youtube:
+        raise HTTPException(status_code=500, detail="YouTube platform adapter not configured")
     
+    auth_url = youtube.get_auth_url(state=state)
     return YouTubeAuthUrl(auth_url=auth_url)
 
 
@@ -65,76 +68,81 @@ async def youtube_callback(
     state: str = Query(None, description="State parameter for CSRF"),
     error: str = Query(None, description="Error from Google"),
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user)
 ):
     """
     Handle YouTube/Google OAuth callback.
-    Exchanges code for tokens, fetches channel info, and stores in DB.
-    Redirects to frontend on completion.
     """
-    # Handle errors from Google
     if error:
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/dashboard?youtube=error&message={error}"
+            url=f"{settings.FRONTEND_URL}/integrations?youtube=error&message={error}"
+        )
+    
+    user = None
+    if state and state.startswith("user_"):
+        try:
+            user_id = int(state.split("_", 1)[1])
+            user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+        except (ValueError, IndexError):
+            pass
+    
+    if not user:
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/integrations?youtube=error&message=invalid_state"
         )
     
     try:
-        # 1. Exchange code for tokens
-        tokens = await youtube_service.get_tokens(code)
+        youtube = registry.get_adapter("youtube")
+        if not youtube:
+            raise ValueError("YouTube adapter not found")
+
+        # 1. Exchange code for tokens & profile data
+        account_data = await youtube.exchange_code(code)
         
-        # 2. Fetch channel info
-        channel = await youtube_service.get_channel_stats(tokens.access_token)
-        
-        # 3. Check if user already has a YouTube connection
+        # 2. Check if user already has a YouTube connection
         existing_account = db.query(SocialAccount).filter(
-            SocialAccount.user_id == current_user.id,
+            SocialAccount.user_id == user.id,
             SocialAccount.provider == "youtube"
         ).first()
         
         if existing_account:
-            # Update existing connection
-            existing_account.provider_user_id = channel.id
-            existing_account.access_token = tokens.access_token
-            existing_account.refresh_token = tokens.refresh_token
-            existing_account.expires_at = tokens.expires_at
-            existing_account.display_name = channel.title
-            existing_account.profile_image_url = channel.thumbnail_url
+            # Encrypt tokens before saving
+            if "access_token" in account_data:
+                account_data["access_token"] = encrypt_token(account_data["access_token"])
+            if "refresh_token" in account_data:
+                account_data["refresh_token"] = encrypt_token(account_data["refresh_token"])
+            for k, v in account_data.items():
+                if hasattr(existing_account, k) and v is not None:
+                    setattr(existing_account, k, v)
             existing_account.updated_at = datetime.utcnow()
         else:
-            # Create new connection
+            # Encrypt tokens before saving
+            if "access_token" in account_data:
+                account_data["access_token"] = encrypt_token(account_data["access_token"])
+            if "refresh_token" in account_data:
+                account_data["refresh_token"] = encrypt_token(account_data["refresh_token"])
             new_account = SocialAccount(
-                user_id=current_user.id,
+                user_id=user.id,
                 provider="youtube",
-                provider_user_id=channel.id,
-                access_token=tokens.access_token,
-                refresh_token=tokens.refresh_token,
-                expires_at=tokens.expires_at,
-                display_name=channel.title,
-                profile_image_url=channel.thumbnail_url,
+                **account_data
             )
             db.add(new_account)
         
         db.commit()
-        
-        # 4. Redirect to frontend with success
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/dashboard?youtube=success"
+            url=f"{settings.FRONTEND_URL}/integrations?youtube=success"
         )
         
-    except ValueError as e:
-        # No YouTube channel found
+    except ValueError:
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/dashboard?youtube=error&message=no_channel_found"
+            url=f"{settings.FRONTEND_URL}/integrations?youtube=error&message=no_channel_found"
         )
-    except httpx.HTTPStatusError as e:
-        # Token exchange or API call failed
+    except httpx.HTTPStatusError:
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/dashboard?youtube=error&message=token_exchange_failed"
+            url=f"{settings.FRONTEND_URL}/integrations?youtube=error&message=token_exchange_failed"
         )
-    except Exception as e:
-        # Unexpected error
+    except Exception:
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/dashboard?youtube=error&message=unexpected_error"
+            url=f"{settings.FRONTEND_URL}/integrations?youtube=error&message=unexpected_error"
         )
 
 
@@ -145,7 +153,6 @@ def youtube_status(
 ):
     """
     Check if current user has connected YouTube.
-    Returns connection status and basic channel info.
     """
     account = db.query(SocialAccount).filter(
         SocialAccount.user_id == current_user.id,
@@ -155,7 +162,6 @@ def youtube_status(
     if not account:
         return YouTubeConnectionStatus(connected=False, provider="youtube")
     
-    # Check if token is expired
     is_expired = account.expires_at and account.expires_at < datetime.utcnow()
     
     return YouTubeConnectionStatus(
@@ -176,9 +182,6 @@ async def youtube_stats(
 ):
     """
     Fetch YouTube channel statistics with caching.
-    
-    Stats are cached for 6 hours to avoid hitting Google's 10,000 unit/day quota.
-    Use force_refresh=true to bypass cache (use sparingly).
     """
     account = db.query(SocialAccount).filter(
         SocialAccount.user_id == current_user.id,
@@ -191,7 +194,6 @@ async def youtube_stats(
             detail="No YouTube connection found. Please connect YouTube first."
         )
     
-    # Check for cached stats first (unless force_refresh is requested)
     if not force_refresh:
         cached_stats = db.query(SocialStats).filter(
             SocialStats.user_id == current_user.id,
@@ -199,7 +201,6 @@ async def youtube_stats(
         ).first()
         
         if cached_stats and not cached_stats.is_stale():
-            # Return cached stats
             return YouTubeChannelStats(
                 channel_id=cached_stats.channel_id or account.provider_user_id,
                 channel_title=cached_stats.channel_title or account.display_name,
@@ -209,7 +210,6 @@ async def youtube_stats(
                 view_count=cached_stats.view_count,
             )
     
-    # Check token expiration and refresh if needed
     if account.expires_at and account.expires_at < datetime.utcnow():
         if not account.refresh_token:
             raise HTTPException(
@@ -218,64 +218,66 @@ async def youtube_stats(
             )
         
         try:
-            # Refresh the token
-            new_tokens = await youtube_service.refresh_tokens(account.refresh_token)
-            account.access_token = new_tokens.access_token
-            account.refresh_token = new_tokens.refresh_token
-            account.expires_at = new_tokens.expires_at
+            youtube = registry.get_adapter("youtube")
+            if not youtube:
+                raise ValueError("Adapter missing")
+                
+            new_tokens = await youtube.refresh_token(account)
+            for k, v in new_tokens.items():
+                if hasattr(account, k) and v is not None:
+                    setattr(account, k, v)
             account.updated_at = datetime.utcnow()
             db.commit()
-        except httpx.HTTPStatusError:
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Failed to refresh token. Please reconnect YouTube."
             )
     
     try:
-        # Fetch fresh stats from YouTube API (costs 1 quota unit)
-        channel = await youtube_service.get_channel_stats(account.access_token)
+        from app.platforms.youtube.adapter import youtube_adapter
+        # Decrypt token before passing to external API
+        decrypted_token = decrypt_token(account.access_token)
+        channel = await youtube_adapter.get_channel_stats(decrypted_token)
         
-        # Update or create cached stats
         cached_stats = db.query(SocialStats).filter(
             SocialStats.user_id == current_user.id,
             SocialStats.provider == "youtube"
         ).first()
         
         if cached_stats:
-            # Update existing cache
-            cached_stats.subscriber_count = channel.subscriber_count
-            cached_stats.view_count = channel.view_count
-            cached_stats.video_count = channel.video_count
-            cached_stats.channel_id = channel.id
-            cached_stats.channel_title = channel.title
-            cached_stats.thumbnail_url = channel.thumbnail_url
+            cached_stats.subscriber_count = channel.get("subscriber_count")
+            cached_stats.view_count = channel.get("view_count")
+            cached_stats.video_count = channel.get("video_count")
+            cached_stats.channel_id = channel.get("channel_id")
+            cached_stats.channel_title = channel.get("channel_title")
+            cached_stats.thumbnail_url = channel.get("thumbnail_url")
             cached_stats.fetched_at = datetime.utcnow()
         else:
-            # Create new cache entry
             cached_stats = SocialStats(
                 user_id=current_user.id,
                 provider="youtube",
-                subscriber_count=channel.subscriber_count,
-                view_count=channel.view_count,
-                video_count=channel.video_count,
-                channel_id=channel.id,
-                channel_title=channel.title,
-                thumbnail_url=channel.thumbnail_url,
-                fetched_at=datetime.utcnow(),
+                subscriber_count=channel.get("subscriber_count"),
+                view_count=channel.get("view_count"),
+                video_count=channel.get("video_count"),
+                channel_id=channel.get("channel_id"),
+                channel_title=channel.get("channel_title"),
+                thumbnail_url=channel.get("thumbnail_url"),
+                fetched_at=datetime.utcnow()
             )
             db.add(cached_stats)
         
         db.commit()
         
         return YouTubeChannelStats(
-            channel_id=channel.id,
-            channel_title=channel.title,
-            thumbnail_url=channel.thumbnail_url,
-            subscriber_count=channel.subscriber_count,
-            video_count=channel.video_count,
-            view_count=channel.view_count,
+            channel_id=cached_stats.channel_id,
+            channel_title=cached_stats.channel_title,
+            thumbnail_url=cached_stats.thumbnail_url,
+            subscriber_count=cached_stats.subscriber_count,
+            video_count=cached_stats.video_count,
+            view_count=cached_stats.view_count,
         )
-    except httpx.HTTPStatusError as e:
+    except httpx.HTTPStatusError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Failed to fetch data from YouTube"
@@ -289,39 +291,27 @@ async def youtube_refresh_token(
 ):
     """
     Refresh the YouTube/Google access token.
-    Called when the current token is expired.
     """
     account = db.query(SocialAccount).filter(
         SocialAccount.user_id == current_user.id,
         SocialAccount.provider == "youtube"
     ).first()
     
-    if not account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No YouTube connection found"
-        )
-    
-    if not account.refresh_token:
+    if not account or not account.refresh_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No refresh token available. Please reconnect YouTube."
         )
     
     try:
-        # Refresh tokens
-        new_tokens = await youtube_service.refresh_tokens(account.refresh_token)
-        
-        # Update database
-        account.access_token = new_tokens.access_token
-        account.refresh_token = new_tokens.refresh_token
-        account.expires_at = new_tokens.expires_at
+        youtube = registry.get_adapter("youtube")
+        new_tokens = await youtube.refresh_token(account)
+        for k, v in new_tokens.items():
+            if hasattr(account, k) and v is not None:
+                setattr(account, k, v)
         account.updated_at = datetime.utcnow()
-        
         db.commit()
-        
-        return {"message": "Token refreshed successfully", "expires_at": new_tokens.expires_at}
-        
+        return {"message": "Token refreshed successfully", "expires_at": account.expires_at}
     except httpx.HTTPStatusError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -335,8 +325,7 @@ def youtube_disconnect(
     current_user: User = Depends(deps.get_current_active_user)
 ):
     """
-    Disconnect YouTube from the current user's account.
-    Removes all stored tokens and channel data.
+    Disconnect YouTube.
     """
     account = db.query(SocialAccount).filter(
         SocialAccount.user_id == current_user.id,
@@ -351,7 +340,6 @@ def youtube_disconnect(
     
     db.delete(account)
     db.commit()
-    
     return {"message": "YouTube disconnected successfully"}
 
 
@@ -359,11 +347,10 @@ def youtube_disconnect(
 async def get_recent_videos(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-    max_results: int = Query(10, ge=1, le=50)
+    limit: int = Query(10, ge=1, le=50)
 ):
     """
     Get the user's recently uploaded YouTube videos.
-    Requires a valid YouTube connection.
     """
     account = db.query(SocialAccount).filter(
         SocialAccount.user_id == current_user.id,
@@ -371,26 +358,16 @@ async def get_recent_videos(
     ).first()
     
     if not account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No YouTube connection found. Please connect YouTube first."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not connected")
     
-    # Check token expiration
     if account.expires_at and account.expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="YouTube token expired. Please refresh or reconnect."
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
     
     try:
-        videos = await youtube_service.get_recent_videos(
-            account.access_token, 
-            max_results=max_results
-        )
+        from app.platforms.youtube.adapter import youtube_adapter
+        # Decrypt token before passing to external API
+        decrypted_token = decrypt_token(account.access_token)
+        videos = await youtube_adapter.get_recent_videos(decrypted_token, max_results=limit)
         return {"items": videos, "total": len(videos)}
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to fetch videos from YouTube"
-        )
+    except httpx.HTTPStatusError:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="API error")

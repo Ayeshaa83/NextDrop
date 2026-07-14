@@ -17,6 +17,8 @@ class ArtistUpdate(BaseModel):
 class ArtistResponse(ArtistBase):
     id: int
     user_id: int
+    is_verified: bool = False
+    approval_status: str = "approved"
 
     class Config:
         from_attributes = True

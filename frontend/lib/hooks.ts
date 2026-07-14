@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { tracksApi, albumsApi, analyticsApi, socialApi, artistApi, adminApi, feedApi, Track, Album, DashboardData, TrackAnalytics, LeaderboardEntry, Artist, Collaboration, AdminStats, PendingTrack, SocialPost, PostType } from './api';
+import { tracksApi, albumsApi, analyticsApi, socialApi, artistApi, adminApi, feedApi, earningsApi, notificationsApi, Track, Album, DashboardData, TrackAnalytics, LeaderboardEntry, Artist, Collaboration, AdminStats, PendingTrack, SocialPost, PostType } from './api';
 
 // Generic data fetching hook
 function useApiData<T>(
@@ -74,10 +74,26 @@ export function useRevenuePrediction() {
   return useApiData(() => analyticsApi.getRevenuePrediction(), []);
 }
 
+export function useTimeseries(days = 30) {
+  return useApiData(() => analyticsApi.getTimeseries(days), [days]);
+}
+
+export function useTerritories() {
+  return useApiData(() => analyticsApi.getTerritories(), []);
+}
+
 // ============ SOCIAL HOOKS ============
 
 export function useLeaderboard(category?: string) {
   return useApiData(() => socialApi.getLeaderboard(category), [category]);
+}
+
+export function useLeaderboardCategories() {
+  return useApiData(() => socialApi.getLeaderboardCategories(), []);
+}
+
+export function useMyLeaderboardPosition(category?: string) {
+  return useApiData(() => socialApi.getMyLeaderboardPosition(category), [category]);
 }
 
 export function useMyCollaborations() {
@@ -159,6 +175,20 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+// ============ EARNINGS HOOKS ============
+
+export function useWallet() {
+  return useApiData(() => earningsApi.getWallet(), []);
+}
+
+export function useEarningsSummary() {
+  return useApiData(() => earningsApi.getSummary(), []);
+}
+
+export function usePayoutHistory() {
+  return useApiData(() => earningsApi.getPayouts(), []);
+}
+
 // ============ ADMIN HOOKS ============
 
 export function useAdminStats() {
@@ -175,6 +205,22 @@ export function useAllTracksAdmin(statusFilter?: string) {
 
 export function useAllUsersAdmin(roleFilter?: string) {
   return useApiData(() => adminApi.getAllUsers(0, 50, roleFilter), [roleFilter]);
+}
+
+export function useAdminPayouts(statusFilter?: string) {
+  return useApiData(() => adminApi.getPayouts(0, 50, statusFilter), [statusFilter]);
+}
+
+export function useAdminArtists() {
+  return useApiData(() => adminApi.getArtists(), []);
+}
+
+export function usePlatformAnalytics(days = 30) {
+  return useApiData(() => adminApi.getPlatformAnalytics(days), [days]);
+}
+
+export function usePlatformConfigs() {
+  return useApiData(() => adminApi.getPlatformConfigs(), []);
 }
 
 // ============ FEED HOOKS (JAM JAR / OPEN VERSE) ============
@@ -196,4 +242,32 @@ export function useOpenVerseFeed(skip = 0, limit = 20) {
 
 export function usePost(postId: number) {
   return useApiData(() => feedApi.getPost(postId), [postId]);
+}
+
+// ============ NOTIFICATION HOOKS ============
+
+// Polls the unread count so the bell badge updates without a page reload.
+export function useUnreadNotificationCount(intervalMs = 20000) {
+  const [count, setCount] = useState(0);
+
+  const refetch = useCallback(async () => {
+    try {
+      const { unread_count } = await notificationsApi.getUnreadCount();
+      setCount(unread_count);
+    } catch {
+      // Silently ignore — polling will retry
+    }
+  }, []);
+
+  useEffect(() => {
+    refetch();
+    const id = setInterval(refetch, intervalMs);
+    return () => clearInterval(id);
+  }, [refetch, intervalMs]);
+
+  return { count, refetch };
+}
+
+export function useNotifications() {
+  return useApiData(() => notificationsApi.getAll(0, 20), []);
 }

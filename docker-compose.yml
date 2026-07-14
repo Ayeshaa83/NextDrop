@@ -1,0 +1,56 @@
+# NextDrop — full stack (Postgres + FastAPI + Next.js)
+#
+#   1. Copy backend/.env.example to backend/.env and fill in secrets.
+#      For compose, DATABASE_URL is overridden below to point at the db service.
+#   2. docker compose up --build
+#   3. Seed demo data (optional):  docker compose exec backend python -m app.seed
+#
+# Frontend: http://localhost:3000   Backend: http://localhost:8000/docs
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nextdrop
+      POSTGRES_PASSWORD: nextdrop
+      POSTGRES_DB: nextdrop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextdrop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override the cloud DB with the local compose Postgres
+      DATABASE_URL: postgresql://nextdrop:nextdrop@db:5432/nextdrop
+      DATABASE_HOSTADDR: ""
+      BACKEND_URL: http://localhost:8000
+    volumes:
+      - uploads:/app/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  uploads:

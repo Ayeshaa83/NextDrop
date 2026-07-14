@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { Search, Bell, LogOut, Settings, UserCircle } from 'lucide-react';
+import { Search, LogOut, Settings, UserCircle } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import NotificationBell from '@/components/NotificationBell';
 
 export default function Header() {
     const pathname = usePathname();
@@ -53,10 +54,7 @@ export default function Header() {
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-6">
-                <button className="relative text-slate-400 hover:text-white transition-colors cursor-pointer">
-                    <Bell className="size-5" />
-                    <span className="absolute -top-1 -right-1 size-2 bg-primary rounded-full border-2 border-[#050505]" />
-                </button>
+                <NotificationBell />
 
                 {/* User Profile Dropdown */}
                 <div className="relative">

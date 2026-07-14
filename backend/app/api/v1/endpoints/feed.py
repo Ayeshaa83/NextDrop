@@ -11,8 +11,9 @@ from typing import Optional, List
 
 from app.api import deps
 from app.api.pagination import PaginationParams, PaginatedResponse, paginate
-from app.models import User, Artist, Track, SocialPost, Comment, PostLike, Collaboration, PostType, CollaborationStatus
+from app.models import User, Artist, Track, SocialPost, Comment, PostLike, Collaboration, PostType, CollaborationStatus, NotificationType
 from app.crud import artist as artist_crud
+from app.services import notification_service
 
 
 router = APIRouter()
@@ -445,7 +446,15 @@ def create_collab_request(
     db.add(new_collab)
     db.commit()
     db.refresh(new_collab)
-    
+
+    notification_service.create(
+        db, post.artist.user_id,
+        NotificationType.COLLAB_REQUEST,
+        title=f"{artist.stage_name} wants to collaborate",
+        body=request_data.message or "Check out their request in Open Verse.",
+        link="/openverse",
+    )
+
     return {
         "message": "Collaboration request sent",
         "collaboration_id": new_collab.id,

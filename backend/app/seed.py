@@ -4,11 +4,23 @@ Populates the database with demo data for frontend development and testing.
 """
 
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from app.db.session import SessionLocal
-from app.models import User, Artist, Track, Album, AlbumTrack, TrackAnalytics, RevenuePrediction, Collaboration, Leaderboard
+from app.models import (
+    User, Artist, Track, Album, AlbumTrack, TrackAnalytics, RevenuePrediction,
+    Collaboration, Leaderboard, AnalyticsSnapshot, TrackDistribution, TrackCollaborator,
+    Wallet, Payout, SocialPost, Comment, PostLike, UserRole, PostType,
+)
 from app.models.social import CollaborationStatus
+from app.models.social_auth import SocialAccount, SocialStats
 from app.sec.security import get_password_hash
+
+# Regional distribution used for the 90-day sample dataset
+COUNTRY_WEIGHTS = [
+    ("IN", 0.28), ("US", 0.18), ("BR", 0.14), ("DE", 0.10),
+    ("GB", 0.09), ("JP", 0.08), ("NG", 0.07), ("MX", 0.06),
+]
+HISTORY_DAYS = 90
 
 # Demo Data
 DEMO_ARTISTS = [
@@ -53,17 +65,42 @@ LEADERBOARD_CATEGORIES = ["Top Tracks", "Viral Producers", "Most Collaborative",
 def clear_database(db):
     """Clear all data from tables (in proper order to respect FK constraints)."""
     print("Clearing existing data...")
+    db.query(PostLike).delete()
+    db.query(Comment).delete()
+    db.query(SocialPost).delete()
+    db.query(AnalyticsSnapshot).delete()
+    db.query(TrackDistribution).delete()
+    db.query(TrackCollaborator).delete()
     db.query(AlbumTrack).delete()
     db.query(TrackAnalytics).delete()
     db.query(RevenuePrediction).delete()
     db.query(Collaboration).delete()
     db.query(Leaderboard).delete()
+    db.query(Payout).delete()
+    db.query(Wallet).delete()
+    db.query(SocialStats).delete()
+    db.query(SocialAccount).delete()
     db.query(Track).delete()
     db.query(Album).delete()
     db.query(Artist).delete()
     db.query(User).delete()
     db.commit()
     print("Database cleared.")
+
+
+def seed_admin(db):
+    """Create the platform admin account."""
+    admin = User(
+        email="admin@nextdrop.ai",
+        hashed_password=get_password_hash("admin1234"),
+        full_name="Platform Admin",
+        is_active=True,
+        role=UserRole.ADMIN.value,
+    )
+    db.add(admin)
+    db.commit()
+    print("Created admin account (admin@nextdrop.ai / admin1234).")
+    return admin
 
 
 def seed_users_and_artists(db):
@@ -155,19 +192,75 @@ def seed_albums(db, artists, tracks):
 
 
 def seed_analytics(db, tracks, artists):
-    """Create mock analytics data for all tracks."""
-    print("Generating analytics data...")
-    
+    """Build the 90-day sample dataset: daily per-platform, per-country
+    snapshots, with aggregate analytics derived from them so every chart,
+    territory list, and earnings figure reconciles."""
+    print(f"Generating {HISTORY_DAYS}-day analytics history...")
+
+    today = date.today()
+    artist_totals = {}  # artist_id -> {"total": n, "spotify": n, "youtube": n}
+
     for track in tracks:
-        streams = random.randint(10000, 2000000)
+        # Each track gets its own popularity level and growth curve
+        base_daily = random.randint(200, 6000)
+        growth = random.uniform(0.99, 1.03)  # slight decay to strong growth
+        spotify_share = random.uniform(0.35, 0.6)
+        youtube_share = random.uniform(0.2, 0.45)
+
+        spotify_total = youtube_total = other_total = 0
+
+        for day_offset in range(HISTORY_DAYS):
+            snap_date = today - timedelta(days=HISTORY_DAYS - 1 - day_offset)
+            # Weekend bump + noise
+            weekday_factor = 1.25 if snap_date.weekday() >= 4 else 1.0
+            day_streams = int(base_daily * (growth ** day_offset) * weekday_factor * random.uniform(0.7, 1.3))
+            if day_streams <= 0:
+                continue
+
+            splits = {
+                "spotify": int(day_streams * spotify_share),
+                "youtube": int(day_streams * youtube_share),
+            }
+            splits["other"] = max(0, day_streams - splits["spotify"] - splits["youtube"])
+
+            for platform, platform_streams in splits.items():
+                if platform_streams <= 0:
+                    continue
+                # Spread the platform's streams across countries
+                remaining = platform_streams
+                for i, (country, weight) in enumerate(COUNTRY_WEIGHTS):
+                    is_last = i == len(COUNTRY_WEIGHTS) - 1
+                    amount = remaining if is_last else int(platform_streams * weight * random.uniform(0.7, 1.3))
+                    amount = min(amount, remaining)
+                    if amount <= 0:
+                        continue
+                    db.add(AnalyticsSnapshot(
+                        track_id=track.id, platform=platform,
+                        snapshot_date=snap_date, streams=amount, country=country,
+                    ))
+                    remaining -= amount
+
+                if platform == "spotify":
+                    spotify_total += platform_streams
+                elif platform == "youtube":
+                    youtube_total += platform_streams
+                else:
+                    other_total += platform_streams
+
+        streams = spotify_total + youtube_total + other_total
         saves = int(streams * random.uniform(0.01, 0.05))
         shares = int(streams * random.uniform(0.005, 0.02))
-        
-        analytics = TrackAnalytics(
+
+        db.add(TrackAnalytics(
             track_id=track.id,
             stream_count=streams,
             save_count=saves,
             share_count=shares,
+            youtube_views=youtube_total,
+            youtube_likes=int(youtube_total * 0.03),
+            youtube_comments=int(youtube_total * 0.004),
+            spotify_streams=spotify_total,
+            spotify_saves=int(spotify_total * 0.02),
             hit_score=round(random.uniform(60, 99), 1),
             viral_velocity=round(shares / 24 + random.uniform(0, 500), 1),
             sentiment_data={
@@ -175,23 +268,80 @@ def seed_analytics(db, tracks, artists):
                 "neutral": round(random.uniform(0.05, 0.25), 2),
                 "negative": round(random.uniform(0.01, 0.15), 2)
             }
-        )
-        db.add(analytics)
-    
-    # Create revenue predictions for each artist
+        ))
+
+        totals = artist_totals.setdefault(track.artist_id, {"total": 0, "spotify": 0, "youtube": 0})
+        totals["total"] += streams
+        totals["spotify"] += spotify_total
+        totals["youtube"] += youtube_total
+
+    # Revenue predictions derived from the same numbers (matches earnings math)
     for artist in artists:
-        artist_tracks = [t for t in tracks if t.artist_id == artist.id]
-        total_streams = sum(random.randint(50000, 500000) for _ in artist_tracks)
-        
-        prediction = RevenuePrediction(
+        totals = artist_totals.get(artist.id, {"total": 0, "spotify": 0, "youtube": 0})
+        monthly_share = 30 / HISTORY_DAYS
+        revenue = (
+            totals["spotify"] * 0.004
+            + totals["youtube"] * 0.001
+            + max(0, totals["total"] - totals["spotify"] - totals["youtube"]) * 0.003
+        ) * monthly_share
+        db.add(RevenuePrediction(
             artist_id=artist.id,
-            predicted_monthly_revenue=round((total_streams / 1000) * 3.5, 2),
+            predicted_monthly_revenue=round(revenue, 2),
             confidence_interval=round(random.uniform(0.75, 0.95), 2)
-        )
-        db.add(prediction)
-    
+        ))
+
     db.commit()
-    print("Analytics data generated.")
+    print("Analytics history generated.")
+
+
+DEMO_POSTS = [
+    {"artist_idx": 0, "track_title": "Neon Nights", "type": PostType.SNIPPET,
+     "content": "Fresh cut from the studio — that outro synth solo took 14 takes. Thoughts?"},
+    {"artist_idx": 1, "track_title": "Midnight City", "type": PostType.OPEN_VERSE,
+     "content": "Leaving verse 2 open on this one. Need a melodic rapper or a smoky alto. Stems on request 🎤"},
+    {"artist_idx": 2, "track_title": "Tokyo Drift", "type": PostType.OPEN_VERSE,
+     "content": "808s are done, hook is done — the bridge is yours. Show me what you got."},
+    {"artist_idx": 3, "track_title": "Abyss", "type": PostType.SNIPPET,
+     "content": "4 AM deep house session. This drop feels illegal."},
+    {"artist_idx": 4, "track_title": None, "type": PostType.GENERAL,
+     "content": "Just crossed 100K total streams as an independent artist. No label, no playlist payola — just you all. Thank you. 🙏"},
+]
+
+
+def seed_social_posts(db, artists, tracks):
+    """Seed the Jam Jar feed and Open Verse marketplace."""
+    print("Creating social posts...")
+    track_by_title = {t.title: t for t in tracks}
+
+    posts = []
+    for post_data in DEMO_POSTS:
+        track = track_by_title.get(post_data["track_title"]) if post_data["track_title"] else None
+        post = SocialPost(
+            artist_id=artists[post_data["artist_idx"]].id,
+            track_id=track.id if track else None,
+            content=post_data["content"],
+            post_type=post_data["type"],
+            created_at=datetime.utcnow() - timedelta(hours=random.randint(1, 96)),
+        )
+        db.add(post)
+        db.flush()
+        posts.append(post)
+
+        # A few likes and comments from other artists
+        others = [a for a in artists if a.id != post.artist_id]
+        for liker in random.sample(others, k=random.randint(1, len(others))):
+            db.add(PostLike(post_id=post.id, artist_id=liker.id))
+        commenter = random.choice(others)
+        db.add(Comment(
+            post_id=post.id, artist_id=commenter.id,
+            text=random.choice([
+                "This goes hard 🔥", "Sending a collab request right now.",
+                "The mix is so clean. What chain are you running?", "Instant save.",
+            ]),
+        ))
+
+    db.commit()
+    print(f"Created {len(posts)} posts with likes and comments.")
 
 
 def seed_collaborations(db, artists):
@@ -247,18 +397,26 @@ def run_seed():
     
     try:
         clear_database(db)
+        seed_admin(db)
         artists = seed_users_and_artists(db)
+
+        # Verify the first two artists so the badge flow is demo-ready
+        for artist in artists[:2]:
+            artist.is_verified = True
+            artist.verified_at = datetime.utcnow()
+        db.commit()
+
         tracks = seed_tracks(db, artists)
         albums = seed_albums(db, artists, tracks)
         seed_analytics(db, tracks, artists)
         seed_collaborations(db, artists)
         seed_leaderboard(db, artists)
-        
+        seed_social_posts(db, artists, tracks)
+
         print("\n✅ Seed completed successfully!")
         print("\n📋 Demo Login Credentials:")
-        print("   Email: axion@nextdrop.ai")
-        print("   Password: demo1234")
-        print("\n   (All demo accounts use password: demo1234)")
+        print("   Artist: axion@nextdrop.ai / demo1234  (all artist accounts use demo1234)")
+        print("   Admin:  admin@nextdrop.ai / admin1234")
         
     except Exception as e:
         print(f"\n❌ Seed failed: {e}")

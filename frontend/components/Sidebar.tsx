@@ -13,7 +13,9 @@ import {
     Shield,
     Sparkles,
     UploadCloud,
-    BarChart3
+    BarChart3,
+    Link2,
+    Wallet
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../lib/auth';
@@ -24,11 +26,21 @@ export default function Sidebar() {
     const { user } = useAuth();
 
     // Hide on Auth pages
-    if (pathname === '/login' || pathname === '/signup') {
+    if (['/login', '/signup', '/forgot-password', '/reset-password'].includes(pathname)) {
         return null;
     }
 
-    const sections = [
+    // Admins get a clean, admin-only menu — no artist features
+    const adminSections = [
+        {
+            title: 'ADMINISTRATION',
+            items: [
+                { name: 'Admin Panel', href: '/admin', icon: Shield },
+            ]
+        },
+    ];
+
+    const artistSections = [
         {
             title: 'PLATFORM',
             items: [
@@ -55,17 +67,20 @@ export default function Sidebar() {
             title: 'ANALYTICS',
             items: [
                 { name: 'Deep Analytics', href: '/analytics', icon: BarChart3 },
+                { name: 'Earnings', href: '/earnings', icon: Wallet },
                 { name: 'Growth Suite', href: '/marketing', icon: Sparkles },
             ]
         },
         {
             title: 'SYSTEM',
             items: [
+                { name: 'Integrations', href: '/integrations', icon: Link2 },
                 { name: 'Settings', href: '/settings', icon: Settings },
-                ...(user?.role === 'admin' ? [{ name: 'Admin', href: '/admin', icon: Shield }] : []),
             ]
         }
     ];
+
+    const sections = user?.role === 'admin' ? adminSections : artistSections;
 
     return (
         <aside className="w-[240px] flex flex-col py-6 border-r border-border-dark bg-bg-deep shrink-0 h-full z-30">
