@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
     Home,
     Compass,
@@ -10,12 +10,17 @@ import {
     Mic2,
     Settings,
     LogOut,
-    Shield,
     Sparkles,
     UploadCloud,
     BarChart3,
     Link2,
-    Wallet
+    Wallet,
+    LayoutDashboard,
+    BadgeCheck,
+    Plug,
+    Banknote,
+    Music,
+    UserCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../lib/auth';
@@ -24,7 +29,8 @@ import { motion } from 'framer-motion';
 
 export default function Sidebar() {
     const pathname = usePathname();
-    const { user } = useAuth();
+    const router = useRouter();
+    const { user, logout } = useAuth();
     const { count: collabUnreadCount } = useCollabUnreadCount();
 
     // Hide on Auth pages
@@ -32,12 +38,21 @@ export default function Sidebar() {
         return null;
     }
 
+    const handleLogout = async () => {
+        await logout();
+        router.push('/login');
+    };
+
     // Admins get a clean, admin-only menu — no artist features
     const adminSections = [
         {
             title: 'ADMINISTRATION',
             items: [
-                { name: 'Admin Panel', href: '/admin', icon: Shield },
+                { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+                { name: 'Pending Approvals', href: '/admin/approvals', icon: Music },
+                { name: 'Artist Verification', href: '/admin/verification', icon: BadgeCheck },
+                { name: 'Platform Management', href: '/admin/platforms', icon: Plug },
+                { name: 'Payout Requests', href: '/admin/payouts', icon: Banknote },
             ]
         },
     ];
@@ -76,6 +91,7 @@ export default function Sidebar() {
         {
             title: 'SYSTEM',
             items: [
+                { name: 'Artist Profile', href: '/account', icon: UserCircle },
                 { name: 'Integrations', href: '/integrations', icon: Link2 },
                 { name: 'Settings', href: '/settings', icon: Settings },
             ]
@@ -139,6 +155,18 @@ export default function Sidebar() {
                     </div>
                 ))}
             </nav>
+
+            {user?.role === 'admin' && (
+                <div className="px-4 pt-4 mt-2 border-t border-white/5">
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-rose-500 hover:bg-rose-500/10 transition-all cursor-pointer"
+                    >
+                        <LogOut className="size-5" />
+                        <span className="text-sm font-bold tracking-tight">Logout</span>
+                    </button>
+                </div>
+            )}
         </aside>
     );
 }

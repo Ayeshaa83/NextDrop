@@ -37,7 +37,7 @@ export default function SettingsPage() {
                 <motion.div
                     variants={item}
                     className="card-premium overflow-hidden cursor-pointer group"
-                    onClick={() => router.push('/account#connected-accounts')}
+                    onClick={() => router.push('/integrations')}
                 >
                     <div className="h-0.5 w-full bg-gradient-to-r from-[#FF0000] via-primary to-[#1DB954] opacity-60 group-hover:opacity-100 transition-opacity" />
                     <div className="p-6 flex items-center justify-between">

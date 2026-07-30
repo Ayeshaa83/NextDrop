@@ -1,11 +1,10 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Mail, Globe, Shield, Award, Link2, CheckCircle2, AlertCircle, XCircle, Pencil, Loader2, Camera } from 'lucide-react';
+import Link from 'next/link';
+import { Mail, Globe, Shield, Award, Link2, CheckCircle2, XCircle, Pencil, Loader2, Camera, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { artistApi, storageApi, ApiError } from '@/lib/api';
-import YouTubeConnect from '@/components/YouTubeConnect';
-import SpotifyConnect from '@/components/SpotifyConnect';
 import { useEffect, useRef, useState } from 'react';
 
 export default function AccountPage() {
@@ -56,41 +55,6 @@ export default function AccountPage() {
             if (avatarInputRef.current) avatarInputRef.current.value = '';
         }
     };
-
-    // Handle OAuth callback result from URL params
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-
-        const youtubeResult = params.get('youtube');
-        const spotifyResult = params.get('spotify');
-
-        if (youtubeResult === 'success') {
-            setNotification({ type: 'success', message: 'YouTube channel connected successfully!' });
-            window.history.replaceState({}, '', window.location.pathname);
-        } else if (youtubeResult === 'error') {
-            const msg = params.get('message');
-            const readable: Record<string, string> = {
-                no_channel_found: 'No YouTube channel found for that Google account.',
-                token_exchange_failed: 'Failed to exchange tokens with Google. Please try again.',
-                invalid_state: 'OAuth state mismatch — please try again.',
-            };
-            setNotification({ type: 'error', message: readable[msg || ''] || 'Failed to connect YouTube.' });
-            window.history.replaceState({}, '', window.location.pathname);
-        }
-
-        if (spotifyResult === 'success') {
-            setNotification({ type: 'success', message: 'Spotify account connected successfully!' });
-            window.history.replaceState({}, '', window.location.pathname);
-        } else if (spotifyResult === 'error') {
-            const msg = params.get('message');
-            const readable: Record<string, string> = {
-                token_exchange_failed: 'Failed to exchange tokens with Spotify. Please try again.',
-                invalid_state: 'OAuth state mismatch — please try again.',
-            };
-            setNotification({ type: 'error', message: readable[msg || ''] || 'Failed to connect Spotify.' });
-            window.history.replaceState({}, '', window.location.pathname);
-        }
-    }, []);
 
     // Auto-dismiss notification after 5s
     useEffect(() => {
@@ -267,84 +231,23 @@ export default function AccountPage() {
                 ))}
             </div>
 
-            {/* ── Connected Accounts Section ── */}
-            <motion.div variants={item} className="space-y-5">
-                <div className="flex items-center gap-3">
-                    <Link2 className="size-5 text-primary" />
-                    <div>
-                        <h2 className="text-xl font-black text-white">Connected Accounts</h2>
-                        <p className="text-sm text-slate-500 font-medium">
-                            Link your streaming profiles to unlock analytics and cross-platform insights.
-                        </p>
-                    </div>
-                </div>
-
-                {/* YouTube */}
-                <motion.div
-                    variants={item}
-                    className="card-premium overflow-hidden"
+            {/* Platform connections now live entirely on /integrations — this just links out */}
+            <motion.div variants={item}>
+                <Link
+                    href="/integrations"
+                    className="card-premium overflow-hidden flex items-center justify-between p-6 group hover:border-primary/30 transition-colors"
                 >
-                    {/* Platform header stripe */}
-                    <div className="h-1 w-full bg-gradient-to-r from-[#FF0000] via-[#ff4444] to-transparent" />
-                    <div className="p-6">
-                        <div className="flex items-center gap-3 mb-5">
-                            {/* YouTube icon */}
-                            <div className="size-9 bg-[#FF0000]/10 rounded-xl flex items-center justify-center border border-[#FF0000]/20">
-                                <svg className="size-5 text-[#FF0000]" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-black text-white tracking-wide">YouTube</h3>
-                                <p className="text-xs text-slate-500">Connect your channel to display subscriber &amp; view stats</p>
-                            </div>
+                    <div className="flex items-center gap-4">
+                        <div className="size-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                            <Link2 className="size-5 text-primary" />
                         </div>
-                        <YouTubeConnect showStats={true} className="bg-transparent p-0 rounded-none" />
-                    </div>
-                </motion.div>
-
-                {/* Spotify */}
-                <motion.div
-                    variants={item}
-                    className="card-premium overflow-hidden"
-                >
-                    <div className="h-1 w-full bg-gradient-to-r from-[#1DB954] via-[#1ed760] to-transparent" />
-                    <div className="p-6">
-                        <div className="flex items-center gap-3 mb-5">
-                            <div className="size-9 bg-[#1DB954]/10 rounded-xl flex items-center justify-center border border-[#1DB954]/20">
-                                <svg className="size-5 text-[#1DB954]" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-black text-white tracking-wide">Spotify</h3>
-                                <p className="text-xs text-slate-500">Connect your Spotify account to track your listening stats</p>
-                            </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-white">Platform Connections</h3>
+                            <p className="text-sm text-slate-500 font-medium">Manage YouTube, Spotify, and other connected platforms.</p>
                         </div>
-                        <SpotifyConnect className="bg-transparent p-0 rounded-none" />
                     </div>
-                </motion.div>
-
-                {/* Coming Soon Platforms */}
-                <motion.div variants={item} className="card-premium p-6">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-4">Coming Soon</p>
-                    <div className="flex flex-wrap gap-3">
-                        {[
-                            { name: 'TikTok', color: '#69C9D0' },
-                            { name: 'SoundCloud', color: '#FF5500' },
-                            { name: 'Apple Music', color: '#FA253E' },
-                            { name: 'Instagram', color: '#E1306C' },
-                        ].map((p) => (
-                            <div
-                                key={p.name}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/3 border border-white/5 opacity-50 cursor-not-allowed"
-                            >
-                                <span className="size-2 rounded-full" style={{ background: p.color }} />
-                                <span className="text-xs font-bold text-slate-400">{p.name}</span>
-                            </div>
-                        ))}
-                    </div>
-                </motion.div>
+                    <ArrowRight className="size-4 text-slate-600 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
+                </Link>
             </motion.div>
         </motion.div>
     );

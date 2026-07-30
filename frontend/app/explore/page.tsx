@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Compass, Crown, Music2, BadgeCheck, Search, X } from 'lucide-react';
 import { useRequireAuth } from '@/lib/auth';
@@ -14,10 +15,11 @@ const RANK_STYLES: Record<number, string> = {
     3: 'bg-amber-700 text-white',
 };
 
-export default function ExplorePage() {
+function ExplorePageContent() {
     const { isLoading: authLoading } = useRequireAuth();
     const { data: artistsPage, loading: artistsLoading } = useAllArtists();
-    const [search, setSearch] = useState('');
+    const searchParams = useSearchParams();
+    const [search, setSearch] = useState(searchParams.get('q') || '');
 
     const container = {
         hidden: { opacity: 0 },
@@ -141,5 +143,13 @@ export default function ExplorePage() {
                 </motion.div>
             )}
         </motion.div>
+    );
+}
+
+export default function ExplorePage() {
+    return (
+        <Suspense fallback={null}>
+            <ExplorePageContent />
+        </Suspense>
     );
 }
