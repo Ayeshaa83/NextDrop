@@ -1,6 +1,7 @@
+from datetime import timedelta
 from typing import Any
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Response, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, status, Response, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel, EmailStr, Field
@@ -55,12 +56,16 @@ def signup(request: Request, user_in: UserCreate, background_tasks: BackgroundTa
 def login_access_token(
     request: Request,
     response: Response,
-    db: Session = Depends(deps.get_db), 
-    form_data: OAuth2PasswordRequestForm = Depends()
+    db: Session = Depends(deps.get_db),
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    remember_me: bool = Form(False),
 ) -> Any:
     """
     OAuth2 compatible token login, get an access token for future requests.
     Sets HttpOnly cookie for secure browser authentication.
+
+    When remember_me is set, both the JWT and the cookie live for
+    settings.REMEMBER_ME_EXPIRE_DAYS instead of the short default session.
     """
     try:
         # 1. Authenticate
@@ -70,30 +75,37 @@ def login_access_token(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database is currently unavailable. Please try again shortly.",
         )
-    
+
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect email or password",
         )
-    
+
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
 
     # 2. Create JWT
-    access_token = create_access_token(subject=user.id)
-    
+    if remember_me:
+        expires_delta = timedelta(days=settings.REMEMBER_ME_EXPIRE_DAYS)
+        max_age = int(expires_delta.total_seconds())
+    else:
+        expires_delta = None
+        max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+
+    access_token = create_access_token(subject=user.id, expires_delta=expires_delta)
+
     # 3. Set HttpOnly cookie
     response.set_cookie(
         key=settings.COOKIE_NAME,
         value=access_token,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        max_age=max_age,
         httponly=settings.COOKIE_HTTPONLY,
         secure=settings.COOKIE_SECURE,
         samesite=settings.COOKIE_SAMESITE,
         domain=settings.COOKIE_DOMAIN,
     )
-    
+
     # 4. Also return token in response body (for backwards compatibility)
     return {
         "access_token": access_token,

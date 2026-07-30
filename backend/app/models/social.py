@@ -11,7 +11,7 @@ import enum
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from app.models.core import Artist
+    from app.models.core import Artist, User
     from app.models.music import Track
 
 
@@ -125,6 +125,22 @@ class Collaboration(Base):
     collaborator: Mapped["Artist"] = relationship(foreign_keys=[collaborator_id], back_populates="received_collabs")
     track: Mapped[Optional["Track"]] = relationship(back_populates="collaborations")
     post: Mapped[Optional["SocialPost"]] = relationship()
+
+
+class CollabMessage(Base):
+    """A chat message within an accepted collaboration."""
+    __tablename__ = "collab_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    collaboration_id: Mapped[int] = mapped_column(ForeignKey("collaborations.id", ondelete="CASCADE"), index=True)
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    content: Mapped[str] = mapped_column(Text)
+
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+    read_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+
+    collaboration: Mapped["Collaboration"] = relationship()
+    sender: Mapped["User"] = relationship()
 
 
 class Leaderboard(Base):

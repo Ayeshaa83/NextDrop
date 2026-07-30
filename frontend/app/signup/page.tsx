@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../lib/auth';
+import { authApi } from '../../lib/api';
 
 export default function Signup() {
     const [stageName, setStageName] = useState('');
@@ -10,10 +11,23 @@ export default function Signup() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [agreed, setAgreed] = useState(false);
     const router = useRouter();
     const { signup, createArtistProfile, isAuthenticated } = useAuth();
+
+    const handleGoogleSignup = async () => {
+        if (isGoogleLoading) return;
+        setIsGoogleLoading(true);
+        setError('');
+        try {
+            await authApi.loginWithGoogle();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Could not start Google sign-in.');
+            setIsGoogleLoading(false);
+        }
+    };
 
     // Redirect if already authenticated
     useEffect(() => {
@@ -185,8 +199,9 @@ export default function Signup() {
                         <div className="flex justify-center gap-4">
                             <button
                                 type="button"
-                                onClick={() => alert('Google signup is coming soon!')}
-                                className="size-12 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors flex items-center justify-center shadow-sm"
+                                onClick={handleGoogleSignup}
+                                disabled={isGoogleLoading}
+                                className="size-12 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
                             </button>

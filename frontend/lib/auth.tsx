@@ -8,7 +8,7 @@ interface AuthContextType {
   isLoading: boolean;
   user: User | null;
   artist: Artist | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshArtist: () => Promise<void>;
@@ -51,8 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    await authApi.login(email, password);
+  const login = useCallback(async (email: string, password: string, rememberMe = false) => {
+    await authApi.login(email, password, rememberMe);
     // Cookie is now set by the backend
     
     // Fetch user info

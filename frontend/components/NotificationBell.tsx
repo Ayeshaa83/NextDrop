@@ -11,13 +11,14 @@ import {
     Banknote,
     BadgeCheck,
     Handshake,
+    XCircle,
     Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { notificationsApi, AppNotification, NotificationType } from '@/lib/api';
 import { useUnreadNotificationCount, useNotifications } from '@/lib/hooks';
 
-const ICONS: Record<NotificationType, typeof Music> = {
+export const NOTIFICATION_ICONS: Record<NotificationType, typeof Music> = {
     track_approved: Music,
     track_rejected: Music,
     artist_approved: Mic2,
@@ -26,9 +27,11 @@ const ICONS: Record<NotificationType, typeof Music> = {
     payout_rejected: Banknote,
     verification_granted: BadgeCheck,
     collab_request: Handshake,
+    collab_accepted: Handshake,
+    collab_rejected: XCircle,
 };
 
-const ACCENT: Record<NotificationType, string> = {
+export const NOTIFICATION_ACCENT: Record<NotificationType, string> = {
     track_approved: 'text-emerald-400 bg-emerald-400/10',
     track_rejected: 'text-red-400 bg-red-400/10',
     artist_approved: 'text-emerald-400 bg-emerald-400/10',
@@ -37,9 +40,14 @@ const ACCENT: Record<NotificationType, string> = {
     payout_rejected: 'text-amber-400 bg-amber-400/10',
     verification_granted: 'text-sky-400 bg-sky-400/10',
     collab_request: 'text-secondary bg-secondary/10',
+    collab_accepted: 'text-emerald-400 bg-emerald-400/10',
+    collab_rejected: 'text-red-400 bg-red-400/10',
 };
 
-function timeAgo(dateStr: string): string {
+const ICONS = NOTIFICATION_ICONS;
+const ACCENT = NOTIFICATION_ACCENT;
+
+export function timeAgo(dateStr: string): string {
     const diffMs = Date.now() - new Date(dateStr).getTime();
     const mins = Math.floor(diffMs / 60000);
     if (mins < 1) return 'just now';
@@ -165,6 +173,13 @@ export default function NotificationBell() {
                                     })
                                 )}
                             </div>
+
+                            <button
+                                onClick={() => { setIsOpen(false); router.push('/notifications'); }}
+                                className="p-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white border-t border-white/5 hover:bg-white/5 transition-colors shrink-0"
+                            >
+                                View All Notifications
+                            </button>
                         </motion.div>
                     </>
                 )}

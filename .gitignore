@@ -38,6 +38,9 @@ yarn-error.log*
 *.sqlite3
 backend/uploads/
 
+# Isolated MusicCNN environment (Python 3.7 + tensorflow==1.15, machine-specific)
+backend/ai_engine/musicnn_env/
+
 # Misc
 .vercel
 dist/

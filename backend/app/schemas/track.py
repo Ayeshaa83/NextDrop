@@ -49,6 +49,23 @@ class TrackUpdate(BaseModel):
     release_date: Optional[datetime] = None
 
 
+class PublicTrackResponse(BaseModel):
+    """Track card for a public artist profile page — no owner-only fields."""
+    id: int
+    title: str
+    duration: int
+    file_url: str
+    cover_art_url: Optional[str] = None
+    genre: Optional[str] = None
+    bpm: Optional[int] = None
+    is_explicit: bool = False
+    created_at: Optional[datetime] = None
+    stream_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
 class CollaboratorResponse(BaseModel):
     id: int
     display_name: Optional[str] = None

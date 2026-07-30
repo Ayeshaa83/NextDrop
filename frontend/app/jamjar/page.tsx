@@ -1,24 +1,21 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useRequireAuth } from '@/lib/auth';
 import { useFeed, formatNumber, useMyTracks } from '@/lib/hooks';
-import { feedApi, SocialPost, PostType } from '@/lib/api';
+import { feedApi, storageApi, tracksApi, ApiError, SocialPost } from '@/lib/api';
 import {
     Flame,
     MessageSquare,
     Share2,
     Play,
-    Users,
     Plus,
     Verified,
-    Search,
     MoreHorizontal,
     X,
     Zap,
-    Music,
-    Upload,
-    Sparkles
+    Sparkles,
+    UploadCloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -313,6 +310,25 @@ function PostCard({
     );
 }
 
+// Reads audio duration (in whole seconds) from a local file before upload.
+function readAudioDuration(file: File): Promise<number> {
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const audio = document.createElement('audio');
+        audio.preload = 'metadata';
+        audio.onloadedmetadata = () => {
+            const duration = Number.isFinite(audio.duration) ? Math.round(audio.duration) : 0;
+            URL.revokeObjectURL(url);
+            resolve(duration);
+        };
+        audio.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(0);
+        };
+        audio.src = url;
+    });
+}
+
 // Create Post Modal
 function CreatePostModal({
     isOpen,
@@ -321,23 +337,50 @@ function CreatePostModal({
 }: {
     isOpen: boolean;
     onClose: () => void;
-    onSubmit: (content: string, postType: PostType, trackId?: number) => void;
+    onSubmit: (content: string, trackId?: number) => Promise<void>;
 }) {
     const [content, setContent] = useState('');
-    const [postType, setPostType] = useState<PostType>('snippet');
+    const [attachMode, setAttachMode] = useState<'library' | 'upload'>('upload');
     const [selectedTrackId, setSelectedTrackId] = useState<number | undefined>(undefined);
+    const [snippetFile, setSnippetFile] = useState<File | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     const { data: tracksData } = useMyTracks();
     const tracks = tracksData?.items || [];
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            setSelectedFile(e.target.files[0]);
-        }
-    };
 
     if (!isOpen) return null;
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        setSnippetFile(file || null);
+        setSubmitError(null);
+    };
+
+    const handleSubmit = async () => {
+        if (!content.trim() || submitting) return;
+        setSubmitting(true);
+        setSubmitError(null);
+        try {
+            if (attachMode === 'upload' && snippetFile) {
+                const duration = await readAudioDuration(snippetFile);
+                const { file_url } = await storageApi.uploadFile(snippetFile, 'tracks');
+                const newTrack = await tracksApi.createTrack({
+                    title: content.trim().slice(0, 60) || snippetFile.name,
+                    duration,
+                    file_url,
+                    is_public: false,
+                });
+                await onSubmit(content, newTrack.id);
+            } else {
+                await onSubmit(content, attachMode === 'library' ? selectedTrackId : undefined);
+            }
+        } catch (err) {
+            console.error('Failed to drop snippet:', err);
+            setSubmitError(err instanceof ApiError ? err.message : 'Something went wrong — try again.');
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     return (
         <motion.div
@@ -359,21 +402,6 @@ function CreatePostModal({
                 </div>
 
                 <div className="space-y-6">
-                    <div className="flex gap-2">
-                        {(['snippet', 'open_verse', 'general'] as PostType[]).map(type => (
-                            <button
-                                key={type}
-                                onClick={() => setPostType(type)}
-                                className={cn(
-                                    "flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer",
-                                    postType === type ? "bg-white text-black shadow-lg" : "bg-white/5 text-slate-500 hover:bg-white/10"
-                                )}
-                            >
-                                {type.replace('_', ' ')}
-                            </button>
-                        ))}
-                    </div>
-
                     <textarea
                         placeholder="What's cooking in the studio? Ask for collabs or share a vibe..."
                         value={content}
@@ -381,48 +409,66 @@ function CreatePostModal({
                         className="w-full h-32 bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary/50 resize-none transition-colors"
                     />
 
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-4">
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleFileChange}
-                                className="hidden"
-                                accept="audio/*"
-                            />
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2">
                             <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="flex-1 py-4 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-primary/40 hover:bg-white/5 transition-all group cursor-pointer"
+                                type="button"
+                                onClick={() => setAttachMode('upload')}
+                                className={cn(
+                                    "flex-1 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border",
+                                    attachMode === 'upload'
+                                        ? "bg-primary text-white border-transparent"
+                                        : "bg-white/5 text-slate-400 border-white/5 hover:text-white"
+                                )}
                             >
-                                <Upload className="size-5 text-slate-500 group-hover:text-primary transition-colors" />
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-hover:text-white transition-colors">
-                                    {selectedFile ? selectedFile.name : "Upload Direct Audio"}
-                                </span>
+                                Upload a Snippet
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setAttachMode('library')}
+                                className={cn(
+                                    "flex-1 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border",
+                                    attachMode === 'library'
+                                        ? "bg-primary text-white border-transparent"
+                                        : "bg-white/5 text-slate-400 border-white/5 hover:text-white"
+                                )}
+                            >
+                                Pick from Library
+                            </button>
+                        </div>
 
-                            <div className="flex items-center justify-center text-slate-700 text-[10px] font-black uppercase">OR</div>
-
+                        {attachMode === 'upload' ? (
+                            <label className="flex items-center gap-3 w-full bg-white/5 border border-dashed border-white/10 rounded-xl px-4 py-4 text-xs font-bold text-slate-400 hover:border-primary/40 hover:text-white cursor-pointer transition-colors">
+                                <UploadCloud className="size-4 shrink-0" />
+                                <span className="truncate">{snippetFile ? snippetFile.name : 'Choose an audio file (mp3, wav, m4a)...'}</span>
+                                <input type="file" accept="audio/*" onChange={handleFileChange} className="hidden" />
+                            </label>
+                        ) : (
                             <select
                                 value={selectedTrackId || ''}
                                 onChange={(e) => setSelectedTrackId(e.target.value ? Number(e.target.value) : undefined)}
-                                className="flex-1 bg-white/5 border border-white/5 rounded-xl px-4 py-4 text-xs font-bold text-white focus:outline-none focus:border-primary/50 appearance-none transition-colors"
+                                className="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-4 text-xs font-bold text-white focus:outline-none focus:border-primary/50 appearance-none transition-colors"
                             >
-                                <option value="" className="bg-[#0A0A0B]">Pick from Library</option>
+                                <option value="" className="bg-[#0A0A0B]">No track</option>
                                 {tracks.map(track => (
                                     <option key={track.id} value={track.id} className="bg-[#0A0A0B]">
                                         {track.title}
                                     </option>
                                 ))}
                             </select>
-                        </div>
+                        )}
                     </div>
 
+                    {submitError && (
+                        <p className="text-xs text-red-400 font-medium px-1">{submitError}</p>
+                    )}
+
                     <button
-                        onClick={() => onSubmit(content, postType, selectedTrackId)}
-                        disabled={!content.trim()}
+                        onClick={handleSubmit}
+                        disabled={!content.trim() || submitting}
                         className="w-full py-4 bg-primary text-white font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] transition-all active:scale-98 disabled:opacity-30 disabled:grayscale cursor-pointer shadow-xl shadow-primary/20"
                     >
-                        Drop Highlight 🔥
+                        {submitting ? 'Dropping...' : 'Drop Highlight 🔥'}
                     </button>
                 </div>
             </motion.div>
@@ -432,21 +478,16 @@ function CreatePostModal({
 
 export default function JamJarFeed() {
     const { user, artist, isLoading: authLoading } = useRequireAuth();
-    const [activeFilter, setActiveFilter] = useState<PostType | undefined>(undefined);
-    const { data: feedData, loading: feedLoading, refetch } = useFeed(activeFilter);
+    const { data: feedData, loading: feedLoading, refetch } = useFeed();
     const [showCreateModal, setShowCreateModal] = useState(false);
 
     const loading = authLoading || feedLoading;
     const posts = feedData?.items || [];
 
-    const handleCreatePost = async (content: string, postType: PostType, trackId?: number) => {
-        try {
-            await feedApi.createPost({ content, post_type: postType, track_id: trackId });
-            setShowCreateModal(false);
-            refetch();
-        } catch (err) {
-            console.error('Failed to create post:', err);
-        }
+    const handleCreatePost = async (content: string, trackId?: number) => {
+        await feedApi.createPost({ content, post_type: 'snippet', track_id: trackId });
+        setShowCreateModal(false);
+        refetch();
     };
 
     const container = {
@@ -482,7 +523,7 @@ export default function JamJarFeed() {
             variants={container}
             initial="hidden"
             animate="show"
-            className="p-8 lg:p-12 max-w-[1400px] mx-auto grid grid-cols-12 gap-10 relative"
+            className="p-8 lg:p-12 max-w-[900px] mx-auto space-y-10 relative"
         >
             <AnimatePresence>
                 {showCreateModal && (
@@ -494,108 +535,42 @@ export default function JamJarFeed() {
                 )}
             </AnimatePresence>
 
-            {/* Left Feed */}
-            <div className="col-span-12 lg:col-span-8 space-y-10">
-                <motion.header
-                    variants={item}
-                    className="flex justify-between items-end"
+            <motion.header
+                variants={item}
+                className="flex justify-between items-end"
+            >
+                <div className="space-y-1">
+                    <p className="text-secondary font-black tracking-[0.2em] text-[10px] uppercase">Artist Network</p>
+                    <h1 className="text-4xl font-black tracking-tight text-white">The Jam Jar</h1>
+                </div>
+                <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="px-8 py-3 bg-primary text-white rounded-xl font-bold flex items-center gap-2 hover:scale-105 transition-all active:scale-95 cursor-pointer shadow-xl shadow-primary/20"
                 >
-                    <div className="space-y-1">
-                        <p className="text-secondary font-black tracking-[0.2em] text-[10px] uppercase">Artist Network</p>
-                        <h1 className="text-4xl font-black tracking-tight text-white">The Jam Jar</h1>
-                    </div>
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="px-8 py-3 bg-primary text-white rounded-xl font-bold flex items-center gap-2 hover:scale-105 transition-all active:scale-95 cursor-pointer shadow-xl shadow-primary/20"
-                    >
-                        <Plus className="size-4" />
-                        Drop Snippet
-                    </button>
-                </motion.header>
+                    <Plus className="size-4" />
+                    Drop Snippet
+                </button>
+            </motion.header>
 
-                {/* Feed Filters */}
-                <motion.div variants={item} className="flex items-center gap-8 border-b border-white/5 pb-4">
-                    {[
-                        { label: 'Discovery', val: undefined, icon: Zap },
-                        { label: 'Snippets', val: 'snippet', icon: Music },
-                        { label: 'Open Verses', val: 'open_verse', icon: Users },
-                    ].map((f) => (
-                        <button
-                            key={f.label}
-                            onClick={() => setActiveFilter(f.val as PostType)}
-                            className={cn(
-                                "flex items-center gap-2 text-xs font-bold transition-all relative pb-4 cursor-pointer",
-                                activeFilter === f.val ? "text-white" : "text-slate-500 hover:text-white"
-                            )}
-                        >
-                            <f.icon className="size-4" />
-                            {f.label}
-                            {activeFilter === f.val && (
-                                <motion.div
-                                    layoutId="activeFilter"
-                                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                                />
-                            )}
-                        </button>
-                    ))}
-                </motion.div>
-
-                {/* Posts Stream */}
-                <motion.div
-                    variants={item}
-                    className="space-y-6"
-                >
-                    {posts.length === 0 ? (
-                        <div className="card-premium p-20 text-center space-y-4">
-                            <div className="size-16 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center mx-auto text-slate-500">
-                                <Zap className="size-8" />
-                            </div>
-                            <h3 className="text-xl font-bold text-white">No vibes detected</h3>
-                            <p className="text-slate-500 text-sm max-w-xs mx-auto">Be the first to drop a snippet and start a collaboration cycle.</p>
+            {/* Posts Stream */}
+            <motion.div
+                variants={item}
+                className="space-y-6"
+            >
+                {posts.length === 0 ? (
+                    <div className="card-premium p-20 text-center space-y-4">
+                        <div className="size-16 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center mx-auto text-slate-500">
+                            <Zap className="size-8" />
                         </div>
-                    ) : (
-                        posts.map((post) => (
-                            <PostCard key={post.id} post={post} />
-                        ))
-                    )}
-                </motion.div>
-            </div>
-
-            {/* Right Sidebar */}
-            <div className="hidden lg:flex col-span-4 flex-col gap-8 mt-24">
-                <motion.div variants={item} className="card-premium p-6 space-y-6">
-                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">Trending Tags</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {["#hyperpop", "#future-phonk", "#openverse", "#stems", "#producer-tag"].map(tag => (
-                            <span key={tag} className="px-3 py-1.5 bg-white/5 border border-white/5 rounded-lg text-[10px] font-black text-slate-300 hover:text-white hover:border-primary/40 transition-all cursor-pointer">
-                                {tag}
-                            </span>
-                        ))}
+                        <h3 className="text-xl font-bold text-white">No vibes detected</h3>
+                        <p className="text-slate-500 text-sm max-w-xs mx-auto">Be the first to drop a snippet and start a collaboration cycle.</p>
                     </div>
-                </motion.div>
-
-                <motion.div variants={item} className="card-premium p-6 space-y-6">
-                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">Suggested Network</h3>
-                    <div className="space-y-5">
-                        {[
-                            { name: 'Axion', role: 'Vocalist', followers: '12K' },
-                            { name: 'NullBase', role: 'Producer', followers: '45K' },
-                            { name: 'Ethereal', role: 'Co-Writer', followers: '2K' },
-                        ].map(u => (
-                            <div key={u.name} className="flex items-center justify-between group cursor-pointer">
-                                <div className="flex items-center gap-3">
-                                    <div className="size-10 rounded-full bg-slate-800 border border-white/5 group-hover:border-primary/50 transition-colors" />
-                                    <div>
-                                        <p className="text-xs font-bold text-white group-hover:text-primary transition-colors">{u.name}</p>
-                                        <p className="text-[10px] font-black text-slate-500 uppercase">{u.role} • {u.followers}</p>
-                                    </div>
-                                </div>
-                                <Plus className="size-4 text-slate-500 group-hover:text-white transition-colors" />
-                            </div>
-                        ))}
-                    </div>
-                </motion.div>
-            </div>
+                ) : (
+                    posts.map((post) => (
+                        <PostCard key={post.id} post={post} />
+                    ))
+                )}
+            </motion.div>
         </motion.div>
     );
 }

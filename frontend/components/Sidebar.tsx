@@ -19,11 +19,13 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../lib/auth';
+import { useCollabUnreadCount } from '../lib/hooks';
 import { motion } from 'framer-motion';
 
 export default function Sidebar() {
     const pathname = usePathname();
     const { user } = useAuth();
+    const { count: collabUnreadCount } = useCollabUnreadCount();
 
     // Hide on Auth pages
     if (['/login', '/signup', '/forgot-password', '/reset-password'].includes(pathname)) {
@@ -60,7 +62,7 @@ export default function Sidebar() {
             title: 'LIBRARY',
             items: [
                 { name: 'My Tracks', href: '/music', icon: Library },
-                { name: 'Collabs', href: '/openverse', icon: Mic2 },
+                { name: 'Collabs', href: '/collabs', icon: Mic2 },
             ]
         },
         {
@@ -118,6 +120,11 @@ export default function Sidebar() {
                                             isActive ? "text-primary" : "text-slate-500 group-hover:text-white"
                                         )} strokeWidth={isActive ? 2.5 : 2} />
                                         <span className="text-sm font-bold tracking-tight relative z-10">{item.name}</span>
+                                        {item.href === '/collabs' && collabUnreadCount > 0 && (
+                                            <span className="ml-auto relative z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-primary rounded-full text-[9px] font-black text-white">
+                                                {collabUnreadCount > 9 ? '9+' : collabUnreadCount}
+                                            </span>
+                                        )}
                                         {isActive && (
                                             <motion.div
                                                 layoutId="activeNavPill"

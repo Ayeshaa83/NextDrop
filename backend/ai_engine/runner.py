@@ -18,11 +18,46 @@ from ai_engine.tag_mapper import map_tags
 
 logger = logging.getLogger(__name__)
 
+_AI_ENGINE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Path to the tagger script
-_TAGGER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tagger_musicnn.py")
+_TAGGER_SCRIPT = os.path.join(_AI_ENGINE_DIR, "tagger_musicnn.py")
 
 # Timeout for the musicnn subprocess (seconds)
 _SUBPROCESS_TIMEOUT = 120
+
+
+def _resolve_musicnn_python() -> str:
+    """
+    MusicCNN needs tensorflow==1.15 + numpy<1.17, which conflict with the
+    main app's modern dependencies — so it runs in an isolated interpreter.
+
+    Resolution order:
+      1. settings.MUSICNN_PYTHON_PATH (explicit — used in Docker/deploy)
+      2. ai_engine/musicnn_env/{Scripts,bin}/python(.exe) if it exists
+         (the local dev venv created per backend/ai_engine/README.md)
+      3. sys.executable (last resort — will error clearly if musicnn/tf1.15
+         aren't installed there, same as before this existed)
+    """
+    try:
+        from app.sec.config import settings
+        if settings.MUSICNN_PYTHON_PATH:
+            configured = settings.MUSICNN_PYTHON_PATH
+            # Relative paths resolve against ai_engine/ itself, not the
+            # server's cwd — works the same regardless of where uvicorn
+            # was started from. e.g. "musicnn_env/Scripts/python.exe"
+            return configured if os.path.isabs(configured) else os.path.join(_AI_ENGINE_DIR, configured)
+    except Exception:
+        pass  # Config not available (e.g. run standalone) — fall through
+
+    for candidate in (
+        os.path.join(_AI_ENGINE_DIR, "musicnn_env", "Scripts", "python.exe"),  # Windows
+        os.path.join(_AI_ENGINE_DIR, "musicnn_env", "bin", "python"),          # Linux/Mac
+    ):
+        if os.path.exists(candidate):
+            return candidate
+
+    return sys.executable
 
 
 def run_musicnn_tagger(audio_path: str) -> Dict[str, Any]:
@@ -49,10 +84,9 @@ def run_musicnn_tagger(audio_path: str) -> Dict[str, Any]:
         return _empty_result(error=f"Tagger script not found: {_TAGGER_SCRIPT}")
 
     try:
-        # Use the same Python interpreter as the current process
-        python_exe = sys.executable
+        python_exe = _resolve_musicnn_python()
 
-        logger.info(f"Spawning musicnn tagger subprocess for: {audio_path}")
+        logger.info(f"Spawning musicnn tagger subprocess ({python_exe}) for: {audio_path}")
 
         result = subprocess.run(
             [python_exe, _TAGGER_SCRIPT, audio_path],

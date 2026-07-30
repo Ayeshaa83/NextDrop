@@ -451,8 +451,8 @@ def create_collab_request(
         db, post.artist.user_id,
         NotificationType.COLLAB_REQUEST,
         title=f"{artist.stage_name} wants to collaborate",
-        body=request_data.message or "Check out their request in Open Verse.",
-        link="/openverse",
+        body=request_data.message or "Check out their request in Collabs.",
+        link="/collabs",
     )
 
     return {

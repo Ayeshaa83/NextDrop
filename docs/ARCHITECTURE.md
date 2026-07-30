@@ -124,7 +124,15 @@ GET /earnings/statement  ──► downloadable CSV
 Two tiers, both with graceful degradation:
 
 1. **Real ML (local):** Musicnn auto-tagger + XGBoost hit-prediction, run as a
-   background task after upload (`processing/tasks.py`). Requires librosa/numpy.
+   background task after upload (`processing/tasks.py`).
+   - XGBoost hit-score: runs in the main app environment (needs `librosa`,
+     pinned in `requirements.txt`).
+   - Musicnn genre/mood/instrument tagging: needs `tensorflow==1.15` +
+     `numpy<1.17`, which conflict with the main app's modern dependencies —
+     it runs in an **isolated Python 3.7 venv**, invoked as a subprocess
+     (`ai_engine/runner.py`). See `backend/ai_engine/README.md` for local
+     setup and the Docker/deployment follow-up (not yet wired into the main
+     Dockerfile — a bounded, documented task for deploy day).
 2. **LLM insights (Claude API):** `app/services/llm_insights.py` wraps
    `claude-sonnet-5` (configurable via `INSIGHTS_MODEL`) with JSON-schema
    constrained outputs. Used by `/api/ai/*`:

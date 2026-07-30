@@ -1,16 +1,20 @@
 'use client';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth';
+import { authApi } from '../../lib/api';
 
-export default function Login() {
+function LoginForm() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { login, isAuthenticated } = useAuth();
 
     // Redirect if already authenticated
@@ -20,13 +24,35 @@ export default function Login() {
         }
     }, [isAuthenticated, router]);
 
+    // Surface errors bounced back from the Google OAuth callback (?google=error&message=...)
+    useEffect(() => {
+        if (searchParams.get('google') === 'error') {
+            const message = searchParams.get('message');
+            setError(message === 'inactive_account'
+                ? 'That account is inactive. Contact support for help.'
+                : 'Google sign-in failed. Please try again.');
+        }
+    }, [searchParams]);
+
+    const handleGoogleLogin = async () => {
+        if (isGoogleLoading) return;
+        setIsGoogleLoading(true);
+        setError('');
+        try {
+            await authApi.loginWithGoogle();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Could not start Google sign-in.');
+            setIsGoogleLoading(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
 
         try {
-            await login(email, password);
+            await login(email, password, rememberMe);
             router.push('/');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Login failed');
@@ -103,9 +129,9 @@ export default function Login() {
                         </div>
 
                         <div className="flex justify-between items-center mb-2 mt-1">
-                            <label className="flex items-center gap-2 cursor-pointer group">
-                                <div className="size-4 rounded border border-white/20 bg-black/30 group-hover:border-primary/50 transition-colors flex items-center justify-center">
-                                    <span className="w-2 h-2 bg-primary rounded-sm opacity-0"></span>
+                            <label className="flex items-center gap-2 cursor-pointer group" onClick={() => setRememberMe((v) => !v)}>
+                                <div className={`size-4 rounded border transition-colors flex items-center justify-center ${rememberMe ? 'border-primary bg-primary/30' : 'border-white/20 bg-black/30 group-hover:border-primary/50'}`}>
+                                    <span className={`w-2 h-2 bg-primary rounded-sm transition-opacity ${rememberMe ? 'opacity-100' : 'opacity-0'}`}></span>
                                 </div>
                                 <span className="text-xs font-semibold text-slate-400 group-hover:text-white transition-colors">Remember me</span>
                             </label>
@@ -142,11 +168,12 @@ export default function Login() {
                         <div className="grid grid-cols-2 gap-4">
                             <button
                                 type="button"
-                                onClick={() => alert('Google authentication is coming soon!')}
-                                className="py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-bold hover:bg-white/10 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                                onClick={handleGoogleLogin}
+                                disabled={isGoogleLoading}
+                                className="py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-bold hover:bg-white/10 transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-4 h-4" />
-                                Google
+                                {isGoogleLoading ? 'Redirecting...' : 'Google'}
                             </button>
                             <button
                                 type="button"
@@ -175,5 +202,13 @@ export default function Login() {
 
             </div>
         </div>
+    );
+}
+
+export default function Login() {
+    return (
+        <Suspense fallback={null}>
+            <LoginForm />
+        </Suspense>
     );
 }

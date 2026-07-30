@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { tracksApi, albumsApi, analyticsApi, socialApi, artistApi, adminApi, feedApi, earningsApi, notificationsApi, Track, Album, DashboardData, TrackAnalytics, LeaderboardEntry, Artist, Collaboration, AdminStats, PendingTrack, SocialPost, PostType } from './api';
+import type { ArtistPublicProfile, PublicTrack, PaginatedResponse } from './api';
 
 // Generic data fetching hook
 function useApiData<T>(
@@ -104,14 +105,38 @@ export function usePendingCollaborations() {
   return useApiData(() => socialApi.getPendingCollaborations(), []);
 }
 
+export function useCollabUnreadCount(intervalMs = 20000) {
+  const [count, setCount] = useState(0);
+  const fetchCount = useCallback(async () => {
+    try {
+      const { unread_count } = await socialApi.getCollabUnreadCount();
+      setCount(unread_count);
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCount();
+    const id = setInterval(fetchCount, intervalMs);
+    return () => clearInterval(id);
+  }, [fetchCount, intervalMs]);
+
+  return { count, refetch: fetchCount };
+}
+
 // ============ ARTIST HOOKS ============
 
 export function useAllArtists() {
-  return useApiData(() => artistApi.listArtists(), []);
+  return useApiData<PaginatedResponse<ArtistPublicProfile>>(() => artistApi.listArtists(0, 100), []);
 }
 
 export function useArtist(artistId: number) {
-  return useApiData(() => artistApi.getArtist(artistId), [artistId]);
+  return useApiData<ArtistPublicProfile>(() => artistApi.getArtist(artistId), [artistId]);
+}
+
+export function useArtistTracks(artistId: number) {
+  return useApiData<PaginatedResponse<PublicTrack>>(() => artistApi.getArtistTracks(artistId), [artistId]);
 }
 
 // ============ COMBINED DATA HOOKS ============
@@ -230,14 +255,6 @@ export function useFeed(postType?: PostType, skip = 0, limit = 20) {
     () => feedApi.getFeed(skip, limit, postType),
     [postType, skip, limit]
   );
-}
-
-export function useSnippetFeed(skip = 0, limit = 20) {
-  return useFeed('snippet', skip, limit);
-}
-
-export function useOpenVerseFeed(skip = 0, limit = 20) {
-  return useFeed('open_verse', skip, limit);
 }
 
 export function usePost(postId: number) {

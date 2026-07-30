@@ -32,6 +32,21 @@ def count_public_tracks(db: Session) -> int:
         .scalar()
     )
 
+def get_public_tracks_by_artist(db: Session, artist_id: int, skip: int = 0, limit: int = 100):
+    return (
+        db.query(Track)
+        .filter(Track.artist_id == artist_id, Track.is_public == True, _released_filter())
+        .order_by(Track.created_at.desc())
+        .offset(skip).limit(limit).all()
+    )
+
+def count_public_tracks_by_artist(db: Session, artist_id: int) -> int:
+    return (
+        db.query(func.count(Track.id))
+        .filter(Track.artist_id == artist_id, Track.is_public == True, _released_filter())
+        .scalar()
+    )
+
 def create_track(db: Session, track_in: TrackCreate, artist_id: int):
     db_track = Track(
         artist_id=artist_id,

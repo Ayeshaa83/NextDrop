@@ -25,14 +25,18 @@ def download_file_from_url(url: str, suffix: str = ".mp3") -> Optional[str]:
     try:
         # Check if URL is a local mock path pointing back to our API
         if "/api/v1/storage/local/" in url:
-            # DEADLOCK FIX: Don't call our own API via HTTP. 
+            # DEADLOCK FIX: Don't call our own API via HTTP.
             # Parse the path directly from the URL.
             # URL format: http://localhost:8000/api/v1/storage/local/tracks/1/abc_test.mp3
-            # We want: d:\NextDrop\backend\uploads\tracks\1\abc_test.mp3
+            # We want: <repo>/backend/uploads/tracks/1/abc_test.mp3
             try:
                 parts = url.split("/api/v1/storage/local/")[1].split("/")
                 # parts = ["tracks", "1", "abc_test.mp3"]
-                base_dir = "d:\\NextDrop\\backend\\uploads"
+                # Portable — matches LOCAL_UPLOADS_DIR in storage.py, not a
+                # hardcoded machine-specific path.
+                base_dir = os.path.abspath(
+                    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "uploads")
+                )
                 local_path = os.path.join(base_dir, *parts)
                 
                 if os.path.exists(local_path):

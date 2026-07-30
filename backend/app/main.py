@@ -8,7 +8,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.sec.config import settings
 from app.api.v1.endpoints import (
     auth, artists, tracks, albums, analytics, social,
-    storage, admin, spotify_auth, youtube_auth, feed, ai_features, integrations,
+    storage, admin, spotify_auth, youtube_auth, google_auth, feed, ai_features, integrations,
     distribution, earnings, notifications,
 )
 from app import models  # noqa: F401 — ensures models are registered with SQLAlchemy
@@ -44,6 +44,7 @@ app.add_middleware(
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(google_auth.router, prefix="/api/v1/auth/google", tags=["Google Sign-In"])
 
 # ── Artist ────────────────────────────────────────────────────────────────────
 app.include_router(artists.router, prefix="/api/v1/artists", tags=["Artists"])

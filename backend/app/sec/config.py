@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    # "Remember me" on login extends the session to this many days instead.
+    REMEMBER_ME_EXPIRE_DAYS: int = 30
     
     # Cookie settings for HttpOnly JWT
     COOKIE_NAME: str = "nextdrop_access_token"
@@ -27,6 +29,12 @@ class Settings(BaseSettings):
     YOUTUBE_CLIENT_ID: str = ""
     YOUTUBE_CLIENT_SECRET: str = ""
     YOUTUBE_REDIRECT_URI: str = "http://localhost:8000/api/v1/youtube/callback"
+
+    # Google Sign-In (separate OAuth client from the YouTube integration above —
+    # this one only needs openid/email/profile scope to log a user in).
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
     # Instagram
     INSTAGRAM_ACCESS_TOKEN: str = ""
@@ -47,6 +55,14 @@ class Settings(BaseSettings):
     EMAIL_FROM_NAME: str = "NextDrop"
     # Password-reset links expire after this many minutes
     PASSWORD_RESET_EXPIRE_MINUTES: int = 30
+
+    # MusicCNN runs in an ISOLATED Python interpreter because it requires
+    # tensorflow==1.15 + numpy<1.17, which conflict with the main app's
+    # modern dependencies. Empty = fall back to the main interpreter (will
+    # fail with a clear error if musicnn/tf1.15 aren't installed there).
+    # Local dev (Windows):   ai_engine/musicnn_env/Scripts/python.exe
+    # Docker/Linux deploy:   /opt/musicnn_env/bin/python  (see ARCHITECTURE.md)
+    MUSICNN_PYTHON_PATH: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env", 

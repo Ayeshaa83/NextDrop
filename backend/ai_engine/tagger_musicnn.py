@@ -49,7 +49,9 @@ def main():
 
         # Extract tags using MSD_musicnn model
         # input_length=3 processes 3-second windows across the track
-        taggram, tags, _ = extractor(
+        # extractor() returns (taggram, labels) when extract_features=False —
+        # only 3 values when extract_features=True (with a features dict too).
+        taggram, tags = extractor(
             file_path,
             model='MSD_musicnn',
             input_length=3,

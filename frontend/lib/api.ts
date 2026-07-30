@@ -37,6 +37,33 @@ export interface Artist {
   approval_status?: 'pending' | 'approved' | 'rejected';
 }
 
+// Public artist card/profile — Explore directory + artist detail page.
+// Only ever built from approved artists (backend never returns pending/rejected here).
+export interface ArtistPublicProfile {
+  id: number;
+  user_id: number;
+  stage_name: string;
+  bio: string | null;
+  profile_picture: string | null;
+  is_verified: boolean;
+  rank: number;
+  track_count: number;
+  total_streams: number;
+}
+
+export interface PublicTrack {
+  id: number;
+  title: string;
+  duration: number;
+  file_url: string;
+  cover_art_url: string | null;
+  genre: string | null;
+  bpm: number | null;
+  is_explicit: boolean;
+  created_at: string | null;
+  stream_count: number;
+}
+
 export interface Track {
   id: number;
   artist_id: number;
@@ -128,13 +155,34 @@ export interface RevenuePrediction {
   calculation_date: string;
 }
 
+export interface CollabArtistSummary {
+  id: number;
+  stage_name: string;
+  profile_picture: string | null;
+  is_verified: boolean;
+}
+
 export interface Collaboration {
   id: number;
   initiator_id: number;
   collaborator_id: number;
   track_id: number | null;
-  status: 'pending' | 'accepted' | 'completed';
+  status: 'pending' | 'accepted' | 'completed' | 'rejected';
   message: string | null;
+  created_at: string;
+  initiator: CollabArtistSummary | null;
+  collaborator: CollabArtistSummary | null;
+  track_title: string | null;
+  unread_count: number;
+}
+
+export interface CollabMessage {
+  id: number;
+  collaboration_id: number;
+  sender_id: number;
+  content: string;
+  created_at: string;
+  is_mine: boolean;
 }
 
 export interface LeaderboardEntry {
@@ -197,10 +245,11 @@ export const authApi = {
     });
   },
 
-  async login(email: string, password: string): Promise<LoginResponse> {
+  async login(email: string, password: string, rememberMe = false): Promise<LoginResponse> {
     const formData = new URLSearchParams();
     formData.append('username', email);
     formData.append('password', password);
+    formData.append('remember_me', String(rememberMe));
 
     const response = await fetch(`${API_BASE_URL}/api/v1/auth/login/access-token`, {
       method: 'POST',
@@ -243,6 +292,12 @@ export const authApi = {
       body: JSON.stringify({ token, new_password: newPassword }),
     });
   },
+
+  /** Kicks off "Sign in with Google" — redirects the browser to Google's consent screen. */
+  async loginWithGoogle(): Promise<void> {
+    const { auth_url } = await apiFetch<{ auth_url: string }>('/api/v1/auth/google/login');
+    window.location.href = auth_url;
+  },
 };
 
 // ============ ARTIST API ============
@@ -266,12 +321,16 @@ export const artistApi = {
     });
   },
 
-  async getArtist(artistId: number): Promise<Artist> {
-    return apiFetch<Artist>(`/api/v1/artists/${artistId}`);
+  async getArtist(artistId: number): Promise<ArtistPublicProfile> {
+    return apiFetch<ArtistPublicProfile>(`/api/v1/artists/${artistId}`);
   },
 
-  async listArtists(skip = 0, limit = 50): Promise<Artist[]> {
-    return apiFetch<Artist[]>(`/api/v1/artists/?skip=${skip}&limit=${limit}`);
+  async listArtists(skip = 0, limit = 50): Promise<PaginatedResponse<ArtistPublicProfile>> {
+    return apiFetch<PaginatedResponse<ArtistPublicProfile>>(`/api/v1/artists/?skip=${skip}&limit=${limit}`);
+  },
+
+  async getArtistTracks(artistId: number, skip = 0, limit = 50): Promise<PaginatedResponse<PublicTrack>> {
+    return apiFetch<PaginatedResponse<PublicTrack>>(`/api/v1/artists/${artistId}/tracks?skip=${skip}&limit=${limit}`);
   },
 };
 
@@ -425,10 +484,32 @@ export const socialApi = {
     return apiFetch<PaginatedResponse<Collaboration>>(`/api/v1/social/collaborations/pending?skip=${skip}&limit=${limit}`);
   },
 
-  async respondToCollaboration(collabId: number, status: 'accepted' | 'completed'): Promise<Collaboration> {
+  async respondToCollaboration(collabId: number, status: 'accepted' | 'rejected' | 'completed'): Promise<Collaboration> {
     return apiFetch<Collaboration>(`/api/v1/social/collaborations/${collabId}`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
+    });
+  },
+
+  async addTrackToCollaboration(collabId: number, trackId: number): Promise<Collaboration> {
+    return apiFetch<Collaboration>(`/api/v1/social/collaborations/${collabId}/track`, {
+      method: 'PUT',
+      body: JSON.stringify({ track_id: trackId }),
+    });
+  },
+
+  async getCollabUnreadCount(): Promise<{ unread_count: number }> {
+    return apiFetch<{ unread_count: number }>('/api/v1/social/collaborations/unread-count');
+  },
+
+  async getCollabMessages(collabId: number, skip = 0, limit = 100): Promise<PaginatedResponse<CollabMessage>> {
+    return apiFetch<PaginatedResponse<CollabMessage>>(`/api/v1/social/collaborations/${collabId}/messages?skip=${skip}&limit=${limit}`);
+  },
+
+  async sendCollabMessage(collabId: number, content: string): Promise<CollabMessage> {
+    return apiFetch<CollabMessage>(`/api/v1/social/collaborations/${collabId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
     });
   },
 
@@ -986,7 +1067,8 @@ export type NotificationType =
   | 'track_approved' | 'track_rejected'
   | 'artist_approved' | 'artist_rejected'
   | 'payout_completed' | 'payout_rejected'
-  | 'verification_granted' | 'collab_request';
+  | 'verification_granted' | 'collab_request'
+  | 'collab_accepted' | 'collab_rejected';
 
 export interface AppNotification {
   id: number;

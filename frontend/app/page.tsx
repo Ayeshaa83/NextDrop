@@ -96,9 +96,9 @@ export default function Dashboard() {
       .catch(() => {});
   }, []);
 
-  // Fetch open-verse posts for Jam Jar preview
+  // Fetch recent Jam Jar posts for the community preview strip
   useEffect(() => {
-    feedApi.getFeed(0, 4, 'open_verse')
+    feedApi.getFeed(0, 4)
       .then(r => setFeedPosts(r.items))
       .catch(() => {});
   }, []);
@@ -604,7 +604,7 @@ export default function Dashboard() {
                           @{post.artist.stage_name}
                         </p>
                         <div className="mt-2 text-[9px] font-black text-secondary uppercase px-2 py-0.5 border border-secondary/20 bg-secondary/10 rounded-md inline-block">
-                          Open Verse
+                          Jam Jar
                         </div>
                       </div>
                     </div>

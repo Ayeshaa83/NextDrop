@@ -101,6 +101,8 @@ class NotificationType(str, enum.Enum):
     PAYOUT_REJECTED = "payout_rejected"
     VERIFICATION_GRANTED = "verification_granted"
     COLLAB_REQUEST = "collab_request"
+    COLLAB_ACCEPTED = "collab_accepted"
+    COLLAB_REJECTED = "collab_rejected"
 
 
 class Notification(Base):

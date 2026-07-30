@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useRequireAuth } from '@/lib/auth';
 import { useMyTracks, formatNumber, formatDuration } from '@/lib/hooks';
@@ -25,6 +26,7 @@ export default function MusicLibrary() {
     const { user, artist, isLoading: authLoading } = useRequireAuth();
     const { data: tracks, loading: tracksLoading } = useMyTracks();
     const { playTracks, currentTrack, isPlaying } = usePlayer();
+    const router = useRouter();
     
     const [distributionTrack, setDistributionTrack] = useState<{id: number, title: string} | null>(null);
 
@@ -97,7 +99,10 @@ export default function MusicLibrary() {
                     <h1 className="text-4xl font-black tracking-tight text-white">Music Library</h1>
                 </div>
                 <div className="flex gap-4">
-                    <button className="px-8 py-3 bg-primary text-white rounded-xl text-sm font-black flex items-center gap-2 hover:scale-105 transition-all active:scale-95 cursor-pointer shadow-xl shadow-primary/20">
+                    <button
+                        onClick={() => router.push('/upload')}
+                        className="px-8 py-3 bg-primary text-white rounded-xl text-sm font-black flex items-center gap-2 hover:scale-105 transition-all active:scale-95 cursor-pointer shadow-xl shadow-primary/20"
+                    >
                         <Upload className="size-4" />
                         New Release
                     </button>
@@ -124,6 +129,7 @@ export default function MusicLibrary() {
                 {/* Upload Action Row */}
                 <motion.div
                     variants={item}
+                    onClick={() => router.push('/upload')}
                     className="card-premium p-4 flex items-center gap-6 group cursor-pointer border-dashed border-2 border-white/5 hover:border-primary/40 hover:bg-primary/5 transition-all"
                 >
                     <div className="size-12 rounded-xl bg-white/5 flex items-center justify-center text-slate-500 group-hover:text-primary transition-colors shrink-0">
