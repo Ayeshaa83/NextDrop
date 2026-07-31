@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Mail, Globe, Shield, Award, Link2, CheckCircle2, XCircle, Pencil, Loader2, Camera, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { artistApi, storageApi, ApiError } from '@/lib/api';
+import { DEFAULT_AVATAR } from '@/lib/avatar';
 import { useEffect, useRef, useState } from 'react';
 
 export default function AccountPage() {
@@ -119,7 +120,7 @@ export default function AccountPage() {
                 <div className="relative">
                     <div className="size-32 rounded-full border-4 border-white/5 overflow-hidden shadow-2xl ring-2 ring-primary/20">
                         <img
-                            src={artist?.profile_picture || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop"}
+                            src={artist?.profile_picture || DEFAULT_AVATAR}
                             alt="Profile"
                             className="w-full h-full object-cover"
                         />

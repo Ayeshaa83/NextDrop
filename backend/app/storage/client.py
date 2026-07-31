@@ -111,19 +111,65 @@ class StorageClient:
         """Determine content type from filename."""
         content_type, _ = mimetypes.guess_type(filename)
         return content_type or "application/octet-stream"
-    
-    def _get_file_url(self, file_key: str) -> str:
-        """Get the final URL for accessing a file after upload."""
-        if self.config.public_url:
-            # Use CDN/public URL
-            return f"{self.config.public_url.rstrip('/')}/{file_key}"
-        
+
+    def _category_from_key(self, file_key: str) -> str:
+        """File keys always start with their category, e.g. 'avatars/7/x.jpg'."""
+        return file_key.split('/', 1)[0]
+
+    def _bucket_for(self, category: str) -> str:
+        """Resolve which bucket a category lives in — most categories share
+        the default bucket, but e.g. avatars can be routed to their own via
+        STORAGE_BUCKET_AVATARS."""
+        return self.config.category_buckets.get(category, self.config.bucket_name)
+
+    def _public_url_for(self, category: str) -> str | None:
+        if category in self.config.category_public_urls:
+            return self.config.category_public_urls[category]
+        # Only fall back to the default public_url when this category is
+        # ALSO in the default bucket — otherwise we'd build a URL pointing
+        # at the wrong bucket entirely (e.g. avatars routed to their own
+        # bucket but with no public URL of their own configured yet).
+        if category in self.config.category_buckets:
+            return None
+        return self.config.public_url
+
+    # Longest expiry SigV4 allows for long-term (non-STS) credentials.
+    _MAX_PRESIGN_EXPIRY = 604800  # 7 days, in seconds
+
+    def _get_file_url(self, file_key: str, category: str | None = None) -> str:
+        """
+        Get the URL for accessing a file after upload. This is stored
+        permanently (Track.file_url, Artist.profile_picture, ...), so it
+        must actually keep working — a bare `endpoint/bucket/key` URL only
+        works if the bucket is public, and we can't assume that.
+
+        - public_url configured (for this category, or the default) -> bucket
+          is public, bare URL is fine and never expires.
+        - otherwise -> presign a GET at the longest expiry SigV4 allows.
+          Not truly permanent (7 days), but works today without requiring
+          the bucket to be public; make the bucket public and set
+          STORAGE_PUBLIC_URL (or STORAGE_PUBLIC_URL_AVATARS) for a link that
+          never expires.
+        """
+        category = category or self._category_from_key(file_key)
+        bucket = self._bucket_for(category)
+        public_url = self._public_url_for(category)
+
+        if public_url:
+            return f"{public_url.rstrip('/')}/{file_key}"
+
         if self.config.endpoint_url:
-            # Use endpoint + bucket
-            return f"{self.config.endpoint_url}/{self.config.bucket_name}/{file_key}"
-        
-        # AWS S3 default
-        return f"https://{self.config.bucket_name}.s3.{self.config.region}.amazonaws.com/{file_key}"
+            try:
+                return self._client.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': bucket, 'Key': file_key},
+                    ExpiresIn=self._MAX_PRESIGN_EXPIRY,
+                )
+            except ClientError as e:
+                raise RuntimeError(f"Failed to generate file URL: {e}")
+
+        # AWS S3 default (public-by-bucket-policy is the norm here)
+        return f"https://{bucket}.s3.{self.config.region}.amazonaws.com/{file_key}"
     
     def generate_upload_url(
         self,
@@ -164,13 +210,14 @@ class StorageClient:
         
         # Generate unique file key
         file_key = self._generate_file_key(category, artist_id, filename, track_id)
-        
+        bucket = self._bucket_for(category)
+
         # Generate presigned URL for PUT
         try:
             upload_url = self._client.generate_presigned_url(
                 'put_object',
                 Params={
-                    'Bucket': self.config.bucket_name,
+                    'Bucket': bucket,
                     'Key': file_key,
                     'ContentType': content_type,
                 },
@@ -179,11 +226,11 @@ class StorageClient:
             )
         except ClientError as e:
             raise RuntimeError(f"Failed to generate upload URL: {e}")
-        
+
         return PresignedUploadResponse(
             upload_url=upload_url,
             file_key=file_key,
-            file_url=self._get_file_url(file_key),
+            file_url=self._get_file_url(file_key, category),
             expires_in=self.config.upload_expiration,
             max_size_bytes=max_size,
             allowed_content_types=allowed_types
@@ -207,16 +254,20 @@ class StorageClient:
         Returns:
             PresignedDownloadResponse with URL
         """
+        category = self._category_from_key(file_key)
+        bucket = self._bucket_for(category)
+        public_url = self._public_url_for(category)
+
         # Use public/CDN URL if available
-        if self.config.public_url:
+        if public_url:
             return PresignedDownloadResponse(
-                download_url=f"{self.config.public_url.rstrip('/')}/{file_key}",
+                download_url=f"{public_url.rstrip('/')}/{file_key}",
                 expires_in=None
             )
-        
+
         # Generate presigned URL for GET
         params = {
-            'Bucket': self.config.bucket_name,
+            'Bucket': bucket,
             'Key': file_key,
         }
         
@@ -249,18 +300,18 @@ class StorageClient:
         """
         try:
             self._client.delete_object(
-                Bucket=self.config.bucket_name,
+                Bucket=self._bucket_for(self._category_from_key(file_key)),
                 Key=file_key
             )
             return True
         except ClientError as e:
             raise RuntimeError(f"Failed to delete file: {e}")
-    
+
     def file_exists(self, file_key: str) -> bool:
         """Check if a file exists in storage."""
         try:
             self._client.head_object(
-                Bucket=self.config.bucket_name,
+                Bucket=self._bucket_for(self._category_from_key(file_key)),
                 Key=file_key
             )
             return True

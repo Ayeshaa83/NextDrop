@@ -1177,6 +1177,11 @@ export interface CommentData {
   created_at: string;
 }
 
+export interface Liker {
+  artist: ArtistInfo;
+  created_at: string;
+}
+
 export interface SocialPost {
   id: number;
   artist: ArtistInfo;
@@ -1188,6 +1193,8 @@ export interface SocialPost {
   created_at: string;
   is_liked: boolean;
   comments: CommentData[];
+  my_collab_id: number | null;
+  my_collab_status: 'pending' | 'accepted' | 'completed' | 'rejected' | null;
 }
 
 export interface CreatePostRequest {
@@ -1242,6 +1249,10 @@ export const feedApi = {
 
   async getPostComments(postId: number, skip = 0, limit = 20): Promise<PaginatedResponse<CommentData>> {
     return apiFetch<PaginatedResponse<CommentData>>(`/api/v1/feed/posts/${postId}/comments?skip=${skip}&limit=${limit}`);
+  },
+
+  async getPostLikes(postId: number, skip = 0, limit = 20): Promise<PaginatedResponse<Liker>> {
+    return apiFetch<PaginatedResponse<Liker>>(`/api/v1/feed/posts/${postId}/likes?skip=${skip}&limit=${limit}`);
   },
 
   async sendCollabRequest(postId: number, message?: string): Promise<CollabRequestResponse> {

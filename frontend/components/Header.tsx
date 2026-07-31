@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Search, LogOut, Settings, UserCircle, Shield } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { DEFAULT_AVATAR } from '@/lib/avatar';
 import { motion, AnimatePresence } from 'framer-motion';
 import NotificationBell from '@/components/NotificationBell';
 
@@ -38,7 +39,7 @@ export default function Header() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    if (pathname === '/login' || pathname === '/signup') {
+    if (pathname === '/login' || pathname === '/signup' || pathname === '/onboarding') {
         return null;
     }
 
@@ -84,7 +85,7 @@ export default function Header() {
                     >
                         <div className="size-8 rounded-full border border-white/10 overflow-hidden ring-1 ring-primary/20 group-hover:ring-primary/50 transition-all">
                             <img
-                                src={artist?.profile_picture || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop"}
+                                src={artist?.profile_picture || DEFAULT_AVATAR}
                                 alt="Profile"
                                 className="w-full h-full object-cover"
                             />

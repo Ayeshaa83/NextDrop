@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRequireAuth } from '@/lib/auth';
 import { useFeed, formatNumber, useMyTracks } from '@/lib/hooks';
-import { feedApi, storageApi, tracksApi, ApiError, SocialPost } from '@/lib/api';
+import { feedApi, storageApi, tracksApi, ApiError, SocialPost, Liker } from '@/lib/api';
 import {
     Flame,
     MessageSquare,
@@ -18,8 +18,10 @@ import {
     UploadCloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { usePlayer } from '@/lib/playerStore';
+import { DEFAULT_AVATAR } from '@/lib/avatar';
 
 // Format relative time
 function formatTimeAgo(dateStr: string): string {
@@ -38,14 +40,24 @@ function formatTimeAgo(dateStr: string): string {
 // Post Card Component
 function PostCard({
     post,
+    currentArtistId,
 }: {
     post: SocialPost;
+    currentArtistId?: number;
 }) {
     const [commentText, setCommentText] = useState('');
     const [showComments, setShowComments] = useState(false);
     const [isLiking, setIsLiking] = useState(false);
     const [localPost, setLocalPost] = useState(post);
-    const [collabStatus, setCollabStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+    const [showLikers, setShowLikers] = useState(false);
+    const [likers, setLikers] = useState<Liker[] | null>(null);
+    const [likersLoading, setLikersLoading] = useState(false);
+    // Seeded from the server so a refresh doesn't forget a request was already sent —
+    // 'rejected' (or no prior request) still allows sending a new one.
+    const initialCollabStatus = post.my_collab_status === 'pending' ? 'pending'
+        : (post.my_collab_status === 'accepted' || post.my_collab_status === 'completed') ? 'accepted'
+        : 'idle';
+    const [collabStatus, setCollabStatus] = useState<'idle' | 'sending' | 'pending' | 'accepted' | 'error'>(initialCollabStatus);
     const [shareCopied, setShareCopied] = useState(false);
     const { playTracks, currentTrack, isPlaying } = usePlayer();
 
@@ -71,11 +83,11 @@ function PostCard({
     };
 
     const handleCollabRequest = async () => {
-        if (collabStatus === 'sending' || collabStatus === 'sent') return;
+        if (collabStatus === 'sending' || collabStatus === 'pending' || collabStatus === 'accepted') return;
         setCollabStatus('sending');
         try {
             await feedApi.sendCollabRequest(localPost.id, `Hey ${localPost.artist.stage_name}, I'd love to collaborate on this!`);
-            setCollabStatus('sent');
+            setCollabStatus('pending');
         } catch (err) {
             console.error('Failed to send collab request:', err);
             setCollabStatus('error');
@@ -93,10 +105,29 @@ function PostCard({
                 is_liked: result.is_liked,
                 like_count: result.like_count,
             }));
+            setLikers(null); // stale now — refetch next time the list is opened
         } catch (err) {
             console.error('Failed to like post:', err);
         } finally {
             setIsLiking(false);
+        }
+    };
+
+    const handleToggleLikers = async () => {
+        if (localPost.like_count === 0) return;
+        const opening = !showLikers;
+        setShowLikers(opening);
+        if (opening && likers === null) {
+            setLikersLoading(true);
+            try {
+                const result = await feedApi.getPostLikes(localPost.id);
+                setLikers(result.items);
+            } catch (err) {
+                console.error('Failed to load likers:', err);
+                setLikers([]);
+            } finally {
+                setLikersLoading(false);
+            }
         }
     };
 
@@ -135,7 +166,7 @@ function PostCard({
                 <div className="flex items-center gap-4">
                     <div className="size-12 rounded-full overflow-hidden border border-white/10 ring-2 ring-transparent group-hover:ring-primary/40 transition-all">
                         <img
-                            src={localPost.artist.profile_picture || 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?q=80&w=200&auto=format&fit=crop'}
+                            src={localPost.artist.profile_picture || DEFAULT_AVATAR}
                             alt={localPost.artist.stage_name}
                             className="w-full h-full object-cover"
                         />
@@ -210,16 +241,27 @@ function PostCard({
             {/* Actions */}
             <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/5">
                 <div className="flex items-center gap-6">
-                    <button
-                        onClick={handleLike}
-                        className={cn(
-                            "flex items-center gap-2 text-xs font-bold transition-all cursor-pointer",
-                            localPost.is_liked ? "text-primary" : "text-slate-500 hover:text-white"
-                        )}
-                    >
-                        <Flame className={cn("size-4", localPost.is_liked && "fill-current")} />
-                        {formatNumber(localPost.like_count)}
-                    </button>
+                    <div className={cn(
+                        "flex items-center gap-1.5 text-xs font-bold transition-all",
+                        localPost.is_liked ? "text-primary" : "text-slate-500"
+                    )}>
+                        <button
+                            onClick={handleLike}
+                            disabled={isLiking}
+                            title={localPost.is_liked ? 'Unlike' : 'Like'}
+                            className="hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                            <Flame className={cn("size-4", localPost.is_liked && "fill-current")} />
+                        </button>
+                        <button
+                            onClick={handleToggleLikers}
+                            disabled={localPost.like_count === 0}
+                            title={localPost.like_count > 0 ? 'See who liked this' : undefined}
+                            className="hover:text-white transition-colors cursor-pointer disabled:hover:text-inherit disabled:cursor-default"
+                        >
+                            {formatNumber(localPost.like_count)}
+                        </button>
+                    </div>
                     <button
                         onClick={() => setShowComments(!showComments)}
                         className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-white transition-all cursor-pointer"
@@ -240,25 +282,79 @@ function PostCard({
                         <Share2 className="size-4" />
                         {shareCopied && 'Copied!'}
                     </button>
-                    <button
-                        onClick={handleCollabRequest}
-                        disabled={collabStatus === 'sending' || collabStatus === 'sent'}
-                        className={cn(
-                            "px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg",
-                            collabStatus === 'sent'
-                                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                                : collabStatus === 'error'
-                                ? "bg-red-500/10 border border-red-500/20 text-red-400"
-                                : "bg-secondary/10 border border-secondary/20 text-secondary hover:bg-secondary hover:text-black shadow-secondary/5"
-                        )}
-                    >
-                        {collabStatus === 'sent' ? 'Request Sent ✓'
-                            : collabStatus === 'sending' ? 'Sending...'
-                            : collabStatus === 'error' ? 'Failed — Retry'
-                            : 'Collab'}
-                    </button>
+                    {/* Only other artists can request a collab — not on your own snippet */}
+                    {currentArtistId !== undefined && localPost.artist.id !== currentArtistId && (
+                        collabStatus === 'accepted' ? (
+                            <Link
+                                href="/collabs"
+                                className="px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 shadow-primary/5"
+                            >
+                                Chat
+                            </Link>
+                        ) : (
+                            <button
+                                onClick={handleCollabRequest}
+                                disabled={collabStatus === 'sending' || collabStatus === 'pending'}
+                                className={cn(
+                                    "px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg",
+                                    collabStatus === 'pending'
+                                        ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                                        : collabStatus === 'error'
+                                        ? "bg-red-500/10 border border-red-500/20 text-red-400"
+                                        : "bg-secondary/10 border border-secondary/20 text-secondary hover:bg-secondary hover:text-black shadow-secondary/5"
+                                )}
+                            >
+                                {collabStatus === 'pending' ? 'Request Sent ✓'
+                                    : collabStatus === 'sending' ? 'Sending...'
+                                    : collabStatus === 'error' ? 'Failed — Retry'
+                                    : 'Collab'}
+                            </button>
+                        )
+                    )}
                 </div>
             </div>
+
+            {/* Liked by */}
+            <AnimatePresence>
+                {showLikers && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="mt-6 pt-6 border-t border-white/5 space-y-3">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                Liked by
+                            </p>
+                            {likersLoading ? (
+                                <p className="text-xs text-slate-500 font-medium">Loading...</p>
+                            ) : (
+                                <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                    {(likers || []).map((liker) => (
+                                        <Link
+                                            key={liker.artist.id}
+                                            href={`/artists/${liker.artist.id}`}
+                                            className="flex items-center gap-3 group/liker"
+                                        >
+                                            <div className="size-8 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
+                                                <img
+                                                    src={liker.artist.profile_picture || DEFAULT_AVATAR}
+                                                    alt={liker.artist.stage_name}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                            <span className="text-[11px] font-bold text-white group-hover/liker:text-primary transition-colors">
+                                                {liker.artist.stage_name}
+                                            </span>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Comments */}
             <AnimatePresence>
@@ -567,7 +663,7 @@ export default function JamJarFeed() {
                     </div>
                 ) : (
                     posts.map((post) => (
-                        <PostCard key={post.id} post={post} />
+                        <PostCard key={post.id} post={post} currentArtistId={artist?.id} />
                     ))
                 )}
             </motion.div>

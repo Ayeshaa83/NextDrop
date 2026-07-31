@@ -34,7 +34,7 @@ export default function Sidebar() {
     const { count: collabUnreadCount } = useCollabUnreadCount();
 
     // Hide on Auth pages
-    if (['/login', '/signup', '/forgot-password', '/reset-password'].includes(pathname)) {
+    if (['/login', '/signup', '/forgot-password', '/reset-password', '/onboarding'].includes(pathname)) {
         return null;
     }
 

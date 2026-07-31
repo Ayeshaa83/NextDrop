@@ -1,9 +1,10 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../lib/auth';
-import { authApi } from '../../lib/api';
+import { authApi, artistApi, storageApi } from '../../lib/api';
+import { DEFAULT_AVATAR } from '../../lib/avatar';
 
 export default function Signup() {
     const [stageName, setStageName] = useState('');
@@ -14,8 +15,18 @@ export default function Signup() {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [agreed, setAgreed] = useState(false);
+    const [avatarFile, setAvatarFile] = useState<File | null>(null);
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+    const avatarInputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
-    const { signup, createArtistProfile, isAuthenticated } = useAuth();
+    const { signup, createArtistProfile, refreshArtist, isAuthenticated } = useAuth();
+
+    const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setAvatarFile(file);
+        setAvatarPreview(URL.createObjectURL(file));
+    };
 
     const handleGoogleSignup = async () => {
         if (isGoogleLoading) return;
@@ -54,6 +65,20 @@ export default function Signup() {
             // Create artist profile with stage name
             if (stageName) {
                 await createArtistProfile(stageName);
+            }
+
+            // Upload the profile picture, if one was chosen — needs the artist
+            // profile to exist first, so this has to happen after the step above.
+            if (avatarFile) {
+                try {
+                    const { file_url } = await storageApi.uploadFile(avatarFile, 'avatars');
+                    await artistApi.updateProfile({ profile_picture: file_url });
+                    await refreshArtist();
+                } catch (avatarErr) {
+                    // Don't block account creation over a failed picture upload —
+                    // they can always add one later from their profile.
+                    console.error('Failed to upload profile picture:', avatarErr);
+                }
             }
 
             router.push('/');
@@ -97,21 +122,40 @@ export default function Signup() {
 
                     <form className="flex flex-col gap-6 relative z-10" onSubmit={handleSubmit}>
 
-                        {/* Role Toggle */}
-                        <div className="flex bg-black/50 p-1.5 rounded-2xl border border-white/5 relative z-10">
-                            <button type="button" className="flex-1 py-2.5 rounded-xl bg-white/10 text-white font-bold text-sm shadow-sm transition-all border border-white/10 flex items-center justify-center gap-2">
-                                <span className="material-symbols-outlined text-[18px]">mic_external_on</span>
-                                Artist
-                            </button>
-                            <button type="button" className="flex-1 py-2.5 rounded-xl text-slate-400 font-bold text-sm hover:text-white transition-all flex items-center justify-center gap-2 hover:bg-white/5 border border-transparent">
-                                <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
-                                Admin
-                            </button>
+                        {/* Profile Picture */}
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="relative">
+                                <div className="size-20 rounded-full overflow-hidden border-2 border-white/10 shadow-lg">
+                                    <img
+                                        src={avatarPreview || DEFAULT_AVATAR}
+                                        alt="Profile preview"
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => avatarInputRef.current?.click()}
+                                    className="absolute bottom-0 right-0 size-7 rounded-full bg-secondary flex items-center justify-center border-2 border-[#0a0a12] shadow-lg text-[#0a0a12] hover:scale-110 transition-transform"
+                                    title="Choose profile picture"
+                                >
+                                    <span className="material-symbols-outlined text-[14px]">photo_camera</span>
+                                </button>
+                                <input
+                                    ref={avatarInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleAvatarChange}
+                                    className="hidden"
+                                />
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                {avatarFile ? 'Looking good' : 'Add a profile picture (optional)'}
+                            </span>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2 relative">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Artist / Alias</label>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Artist Name</label>
                                 <div className="relative group">
                                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-secondary transition-colors text-[20px]">person</span>
                                     <input

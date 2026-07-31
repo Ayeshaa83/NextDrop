@@ -17,8 +17,9 @@ import {
 import { useRequireAuth } from '@/lib/auth';
 import { useArtist, useArtistTracks, formatNumber, formatDuration } from '@/lib/hooks';
 import { usePlayer } from '@/lib/playerStore';
+import { DEFAULT_AVATAR } from '@/lib/avatar';
 
-const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop';
+const FALLBACK_AVATAR = DEFAULT_AVATAR;
 const FALLBACK_COVER = 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=500&auto=format&fit=crop';
 
 export default function ArtistProfilePage() {

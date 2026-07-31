@@ -96,15 +96,19 @@ export default function GlobalPlayer() {
     // Progress percentage
     const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
-    // Hide the player on Auth pages or if no track
-    if (pathname === '/login' || pathname === '/signup' || !currentTrack) {
-        return null;
-    }
+    // Hide the player pill on Auth pages or if no track — but the <audio> element
+    // itself must ALWAYS render (see below). If it only mounted once a track
+    // existed, audioRef.current would still be null the very first time play()
+    // runs (the ref attaches on the render AFTER state updates), and the effect
+    // that pushes the ref into the store only runs once on mount — so it would
+    // permanently store null and every future play() call would silently no-op.
+    const hidePlayerUI = pathname === '/login' || pathname === '/signup' || !currentTrack;
 
     return (
         <>
             <audio ref={audioRef} preload="metadata" />
 
+            {!hidePlayerUI && (
             <motion.div
                 layout
                 onHoverStart={() => setIsHovered(true)}
@@ -227,6 +231,7 @@ export default function GlobalPlayer() {
                     />
                 </div>
             </motion.div>
+            )}
         </>
     );
 }

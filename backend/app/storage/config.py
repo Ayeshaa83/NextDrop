@@ -5,7 +5,7 @@ Supports: AWS S3, Cloudflare R2, DigitalOcean Spaces, MinIO
 """
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Literal
 
@@ -15,23 +15,29 @@ StorageProvider = Literal["s3", "r2", "spaces", "minio"]
 @dataclass
 class StorageConfig:
     """Configuration for S3-compatible object storage."""
-    
+
     # Provider type
     provider: StorageProvider
-    
+
     # Connection settings
     access_key_id: str
     secret_access_key: str
     bucket_name: str
     region: str
-    
+
     # Endpoint URL (required for R2, Spaces, MinIO)
     endpoint_url: str | None = None
-    
+
     # CDN/Public URL for serving files (optional)
     # If set, download URLs will use this domain instead of presigned URLs
     public_url: str | None = None
-    
+
+    # Per-category overrides — e.g. avatars can live in their own bucket
+    # (separate lifecycle/access pattern from tracks/covers). Falls back to
+    # bucket_name/public_url above when a category has no override.
+    category_buckets: dict[str, str] = field(default_factory=dict)
+    category_public_urls: dict[str, str] = field(default_factory=dict)
+
     # Default expiration for presigned URLs (seconds)
     upload_expiration: int = 3600  # 1 hour
     download_expiration: int = 86400  # 24 hours
@@ -70,13 +76,23 @@ def get_storage_config() -> StorageConfig:
         STORAGE_PUBLIC_URL: CDN URL for public file access
         STORAGE_UPLOAD_EXPIRATION: Upload URL expiration in seconds
         STORAGE_DOWNLOAD_EXPIRATION: Download URL expiration in seconds
+        STORAGE_BUCKET_AVATARS: Dedicated bucket for avatar uploads (optional —
+            falls back to STORAGE_BUCKET_NAME when unset)
+        STORAGE_PUBLIC_URL_AVATARS: Public URL for that bucket, once it's public
     """
     provider = os.getenv("STORAGE_PROVIDER", "s3").lower()
-    
+
     # Validate provider
     if provider not in ("s3", "r2", "spaces", "minio"):
         raise ValueError(f"Invalid STORAGE_PROVIDER: {provider}")
-    
+
+    category_buckets: dict[str, str] = {}
+    category_public_urls: dict[str, str] = {}
+    if avatars_bucket := os.getenv("STORAGE_BUCKET_AVATARS"):
+        category_buckets["avatars"] = avatars_bucket
+    if avatars_public_url := os.getenv("STORAGE_PUBLIC_URL_AVATARS"):
+        category_public_urls["avatars"] = avatars_public_url
+
     config = StorageConfig(
         provider=provider,  # type: ignore
         access_key_id=os.getenv("STORAGE_ACCESS_KEY_ID", ""),
@@ -85,10 +101,12 @@ def get_storage_config() -> StorageConfig:
         region=os.getenv("STORAGE_REGION", "auto"),
         endpoint_url=os.getenv("STORAGE_ENDPOINT_URL"),
         public_url=os.getenv("STORAGE_PUBLIC_URL"),
+        category_buckets=category_buckets,
+        category_public_urls=category_public_urls,
         upload_expiration=int(os.getenv("STORAGE_UPLOAD_EXPIRATION", "3600")),
         download_expiration=int(os.getenv("STORAGE_DOWNLOAD_EXPIRATION", "86400")),
     )
-    
+
     return config
 
 

@@ -6,8 +6,7 @@ import { motion } from 'framer-motion';
 import { Compass, Crown, Music2, BadgeCheck, Search, X } from 'lucide-react';
 import { useRequireAuth } from '@/lib/auth';
 import { useAllArtists, formatNumber } from '@/lib/hooks';
-
-const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300&auto=format&fit=crop';
+import { DEFAULT_AVATAR as FALLBACK_AVATAR } from '@/lib/avatar';
 
 const RANK_STYLES: Record<number, string> = {
     1: 'bg-amber-400 text-black',

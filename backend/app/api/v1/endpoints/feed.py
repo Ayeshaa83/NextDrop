@@ -52,7 +52,16 @@ class CommentResponse(BaseModel):
     artist: ArtistInfo
     text: str
     created_at: datetime
-    
+
+    class Config:
+        from_attributes = True
+
+
+class LikerResponse(BaseModel):
+    """One artist who liked a post — for the 'liked by' list."""
+    artist: ArtistInfo
+    created_at: datetime
+
     class Config:
         from_attributes = True
 
@@ -69,7 +78,12 @@ class SocialPostResponse(BaseModel):
     created_at: datetime
     is_liked: bool = False  # Whether current user has liked
     comments: List[CommentResponse] = []  # Recent comments (optional)
-    
+    # The viewer's own collaboration request against this post, if any —
+    # lets the frontend show "Request Sent" / "Chat" instead of resetting
+    # to a fresh "Collab" button on every reload.
+    my_collab_id: Optional[int] = None
+    my_collab_status: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -131,13 +145,18 @@ def artist_to_info(artist: Artist) -> ArtistInfo:
     )
 
 
-def post_to_response(post: SocialPost, current_artist_id: Optional[int] = None, include_comments: bool = False) -> SocialPostResponse:
+def post_to_response(
+    post: SocialPost,
+    current_artist_id: Optional[int] = None,
+    include_comments: bool = False,
+    my_collab: Optional[tuple[int, str]] = None,
+) -> SocialPostResponse:
     """Convert SocialPost model to response schema."""
     # Check if current user has liked
     is_liked = False
     if current_artist_id:
         is_liked = any(like.artist_id == current_artist_id for like in post.likes)
-    
+
     # Get recent comments if requested
     comments = []
     if include_comments and post.comments:
@@ -152,7 +171,7 @@ def post_to_response(post: SocialPost, current_artist_id: Optional[int] = None, 
             )
             for c in recent_comments
         ]
-    
+
     return SocialPostResponse(
         id=post.id,
         artist=artist_to_info(post.artist),
@@ -164,7 +183,29 @@ def post_to_response(post: SocialPost, current_artist_id: Optional[int] = None, 
         created_at=post.created_at,
         is_liked=is_liked,
         comments=comments,
+        my_collab_id=my_collab[0] if my_collab else None,
+        my_collab_status=my_collab[1] if my_collab else None,
     )
+
+
+def _my_collab_by_post(db: Session, artist_id: int, post_ids: list[int]) -> dict[int, tuple[int, str]]:
+    """Map post_id -> (collaboration_id, status) for collab requests the
+    current artist has sent from these posts. Latest one wins per post."""
+    if not post_ids:
+        return {}
+    rows = (
+        db.query(Collaboration)
+        .filter(
+            Collaboration.initiator_id == artist_id,
+            Collaboration.post_id.in_(post_ids),
+        )
+        .order_by(Collaboration.created_at.desc())
+        .all()
+    )
+    result: dict[int, tuple[int, str]] = {}
+    for row in rows:
+        result.setdefault(row.post_id, (row.id, row.status))
+    return result
 
 
 # ============ ENDPOINTS ============
@@ -254,10 +295,14 @@ def get_feed(
     
     # Paginate
     posts = query.offset(pagination.skip).limit(pagination.limit).all()
-    
+
     # Convert to response
-    items = [post_to_response(post, artist.id, include_comments=True) for post in posts]
-    
+    collab_by_post = _my_collab_by_post(db, artist.id, [p.id for p in posts])
+    items = [
+        post_to_response(post, artist.id, include_comments=True, my_collab=collab_by_post.get(post.id))
+        for post in posts
+    ]
+
     return paginate(items, total, pagination.skip, pagination.limit)
 
 
@@ -279,8 +324,9 @@ def get_post(
     
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-    
-    return post_to_response(post, artist.id, include_comments=True)
+
+    my_collab = _my_collab_by_post(db, artist.id, [post.id]).get(post.id)
+    return post_to_response(post, artist.id, include_comments=True, my_collab=my_collab)
 
 
 @router.post("/posts/{post_id}/like", status_code=status.HTTP_200_OK)
@@ -385,6 +431,33 @@ def get_post_comments(
         for c in comments
     ]
     
+    return paginate(items, total, pagination.skip, pagination.limit)
+
+
+@router.get("/posts/{post_id}/likes", response_model=PaginatedResponse[LikerResponse])
+def get_post_likes(
+    post_id: int,
+    pagination: PaginationParams = Depends(),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user)
+):
+    """Get the artists who liked a post, most recent first."""
+    post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+
+    query = db.query(PostLike).options(
+        joinedload(PostLike.artist)
+    ).filter(PostLike.post_id == post_id).order_by(desc(PostLike.created_at))
+
+    total = query.count()
+    likes = query.offset(pagination.skip).limit(pagination.limit).all()
+
+    items = [
+        LikerResponse(artist=artist_to_info(l.artist), created_at=l.created_at)
+        for l in likes
+    ]
+
     return paginate(items, total, pagination.skip, pagination.limit)
 
 

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { DEFAULT_AVATAR } from '@/lib/avatar';
 
 export default function Leaderboard() {
     const { user, artist, isLoading: authLoading } = useRequireAuth();
@@ -37,18 +38,9 @@ export default function Leaderboard() {
 
     const items = leaderboardData?.items || [];
 
-    // Default avatars
-    const getAvatar = (i: number) => `https://images.unsplash.com/photo-${[
-        '1570295999919-56ceb5ecca61',
-        '1534528741775-53994a69daeb',
-        '1506794778202-cad84cf45f1d',
-        '1518020382113-a7e8fc38eac9',
-        '1544005313-94ddf0286df2'
-    ][i % 5]}?q=80&w=200&auto=format&fit=crop`;
-
     const winners = items.slice(0, 3).map((entry: any, i: number) => ({
         ...entry,
-        avatar: entry.profile_picture || getAvatar(i),
+        avatar: entry.profile_picture || DEFAULT_AVATAR,
         rank: i + 1
     }));
 
@@ -59,7 +51,7 @@ export default function Leaderboard() {
 
     const rankings = items.slice(3).map((entry: any, i: number) => ({
         ...entry,
-        avatar: entry.profile_picture || getAvatar(i + 3),
+        avatar: entry.profile_picture || DEFAULT_AVATAR,
         rank: i + 4
     }));
 

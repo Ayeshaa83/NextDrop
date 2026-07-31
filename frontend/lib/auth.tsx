@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { authApi, artistApi, Artist, User } from './api';
 
 interface AuthContextType {
@@ -127,12 +128,23 @@ export function useAuth() {
 // Hook for requiring authentication
 export function useRequireAuth() {
   const auth = useAuth();
-  
+  const pathname = usePathname();
+
   useEffect(() => {
-    if (!auth.isLoading && !auth.isAuthenticated) {
+    if (auth.isLoading) return;
+    if (!auth.isAuthenticated) {
       window.location.href = '/login';
+      return;
     }
-  }, [auth.isLoading, auth.isAuthenticated]);
+    // Every non-admin account needs an artist profile to use the app — normal
+    // signup collects a stage name inline before it ever reaches this hook,
+    // but Google sign-in (or any account that otherwise slipped through
+    // without one) doesn't. Catch it here instead of leaving them stuck on a
+    // dashboard with no name, wired to no artist ID.
+    if (auth.user?.role !== 'admin' && !auth.artist && pathname !== '/onboarding') {
+      window.location.href = '/onboarding';
+    }
+  }, [auth.isLoading, auth.isAuthenticated, auth.user?.role, auth.artist, pathname]);
 
   return auth;
 }

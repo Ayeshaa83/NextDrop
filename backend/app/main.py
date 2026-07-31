@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # populate os.environ from .env — app/storage/config.py reads it directly via os.getenv()
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

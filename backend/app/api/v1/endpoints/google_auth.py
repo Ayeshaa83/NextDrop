@@ -16,6 +16,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.api import deps
+from app.crud import artist as artist_crud
 from app.models import User
 from app.sec.config import settings
 from app.sec.security import create_access_token, get_password_hash
@@ -116,6 +117,14 @@ async def google_callback(
         db.commit()
         db.refresh(user)
 
-    redirect = RedirectResponse(url=f"{settings.FRONTEND_URL}/")
+    # Anyone without an artist profile yet still needs one — email signup
+    # collects a stage name inline before ever reaching the dashboard; Google
+    # has no equivalent step, so route them to onboarding instead of a
+    # half-empty dashboard. Checked by actual artist existence (not just
+    # "is this a brand-new User row") so accounts that slipped through
+    # before this fix also get caught on their next Google sign-in.
+    has_artist = artist_crud.get_artist_by_user_id(db, user_id=user.id) is not None
+    destination = "/" if has_artist else "/onboarding"
+    redirect = RedirectResponse(url=f"{settings.FRONTEND_URL}{destination}")
     _set_session_cookie(redirect, user.id)
     return redirect

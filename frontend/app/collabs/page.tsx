@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRequireAuth } from '@/lib/auth';
-import { useMyCollaborations, usePendingCollaborations, useMyTracks } from '@/lib/hooks';
+import { useMyCollaborations, usePendingCollaborations, useMyTracks, useTrack } from '@/lib/hooks';
 import { socialApi, Collaboration } from '@/lib/api';
 import {
     Users,
@@ -13,13 +13,67 @@ import {
     BadgeCheck,
     Music2,
     X,
+    Play,
+    Pause,
+    Download,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { cn, downloadFile } from '@/lib/utils';
 import CollabChat from '@/components/CollabChat';
+import { DEFAULT_AVATAR as FALLBACK_AVATAR } from '@/lib/avatar';
+import { usePlayer } from '@/lib/playerStore';
 
-const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
+// Both collaborators can play/download the track attached to their accepted
+// collaboration, regardless of which of them owns/uploaded it.
+function CollabTrackControls({ trackId, artistName }: { trackId: number; artistName: string }) {
+    const { data: track } = useTrack(trackId);
+    const { playTracks, currentTrack, isPlaying } = usePlayer();
+    const [downloading, setDownloading] = useState(false);
+
+    if (!track) return null;
+    const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
+
+    const handleDownload = async () => {
+        if (downloading) return;
+        setDownloading(true);
+        try {
+            await downloadFile(track.file_url, `${track.title}.mp3`);
+        } catch (err) {
+            console.error('Failed to download track:', err);
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    return (
+        <div className="flex items-center gap-1.5 shrink-0">
+            <button
+                onClick={() => playTracks([{
+                    id: track.id,
+                    title: track.title,
+                    artist: artistName,
+                    url: track.file_url,
+                    coverUrl: track.cover_art_url || undefined,
+                    duration: track.duration,
+                }], 0)}
+                disabled={!track.file_url}
+                title="Play"
+                className="size-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-300 hover:bg-white/10 hover:text-white transition-all disabled:opacity-40"
+            >
+                {isCurrentlyPlaying ? <Pause className="size-3.5 fill-current" /> : <Play className="size-3.5 fill-current" />}
+            </button>
+            <button
+                onClick={handleDownload}
+                disabled={downloading}
+                title="Download"
+                className="size-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-300 hover:bg-white/10 hover:text-white transition-all disabled:opacity-40"
+            >
+                <Download className="size-3.5" />
+            </button>
+        </div>
+    );
+}
 
 // Lets either collaborator attach a finished track from their own library to an
 // accepted collaboration — it then shows up as that collab's track everywhere.
@@ -187,7 +241,7 @@ export default function CollabsPage() {
                 <p className="text-primary font-black tracking-[0.2em] text-[10px] uppercase">Artist Network</p>
                 <h1 className="text-4xl font-black tracking-tight text-white">Collabs</h1>
                 <p className="text-slate-500 font-medium">
-                    Requests, accepted collaborations, and chat with the artists you're working with.
+                    Requests, accepted collaborations, and chat with the artists you&apos;re working with.
                 </p>
             </motion.header>
 
@@ -220,7 +274,7 @@ export default function CollabsPage() {
                                         </p>
                                         <p className="text-xs text-slate-400 mt-0.5 max-w-lg truncate">
                                             {collab.message || 'Wants to collaborate with you.'}
-                                            {collab.track_title && <span className="text-slate-500"> — on "{collab.track_title}"</span>}
+                                            {collab.track_title && <span className="text-slate-500"> — on &quot;{collab.track_title}&quot;</span>}
                                         </p>
                                     </div>
                                 </div>
@@ -288,6 +342,9 @@ export default function CollabsPage() {
                                                 </p>
                                             )}
                                         </div>
+                                        {collab.track_id && (
+                                            <CollabTrackControls trackId={collab.track_id} artistName={other?.stage_name || 'Collaboration'} />
+                                        )}
                                     </div>
 
                                     <div className="flex items-center justify-between gap-2 flex-wrap">
