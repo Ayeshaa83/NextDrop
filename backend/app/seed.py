@@ -140,13 +140,25 @@ def seed_tracks(db, artists):
     print("Creating tracks...")
     tracks = []
     
-    for track_data in DEMO_TRACKS:
+    # List of stable, public sample MP3 tracks for player playback
+    sample_mp3s = [
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
+    ]
+    
+    for i, track_data in enumerate(DEMO_TRACKS):
         artist = artists[track_data["artist_idx"]]
         track = Track(
             artist_id=artist.id,
             title=track_data["title"],
             duration=track_data["duration"],
-            file_url=f"https://storage.nextdrop.ai/tracks/{track_data['title'].lower().replace(' ', '-')}.mp3",
+            file_url=sample_mp3s[i % len(sample_mp3s)],
             genre=track_data["genre"],
             bpm=track_data["bpm"],
             is_public=True

@@ -3,9 +3,10 @@
 import { useState, useMemo } from 'react';
 import { usePendingTracks } from '@/lib/hooks';
 import { adminApi } from '@/lib/api';
-import { Music, Play } from 'lucide-react';
+import { Music, Play, Loader2 } from 'lucide-react';
 import { usePlayer } from '@/lib/playerStore';
 import { AdminSearchInput } from '../_components';
+import { cn } from '@/lib/utils';
 
 export default function PendingApprovalsPage() {
     const { data: pendingTracks, loading, refetch } = usePendingTracks();
@@ -103,73 +104,108 @@ export default function PendingApprovalsPage() {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {filteredTracks.map((track) => (
-                            <div
-                                key={track.id}
-                                className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-all"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="size-14 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-                                        <Music className="size-6 text-primary" />
+                        {filteredTracks.map((track) => {
+                            // Compute AI Metadata Quality Score (0-100) based on metadata completeness
+                            const titleScore = track.title ? 25 : 0;
+                            const genreScore = track.genre ? 25 : 0;
+                            const bpmScore = track.bpm ? 25 : 15;
+                            const durationScore = track.duration ? 25 : 20;
+                            const qualityScore = Math.min(100, (track as any).quality_score || (titleScore + genreScore + bpmScore + durationScore));
+                            const isVerified = qualityScore >= 80;
+
+                            return (
+                                <div
+                                    key={track.id}
+                                    className="flex flex-col md:flex-row md:items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-all gap-4"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="size-14 rounded-xl bg-gradient-to-br from-primary/20 to-emerald-500/20 flex items-center justify-center shrink-0 border border-white/5">
+                                            <Music className="size-6 text-primary" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-3 flex-wrap">
+                                                <h3 className="text-white font-bold text-lg">{track.title}</h3>
+                                                
+                                                {/* AI Metadata Quality Score Badge (0-100) */}
+                                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs font-black">
+                                                    <span className="text-slate-400 text-[10px] uppercase tracking-widest">AI Score:</span>
+                                                    <span className={isVerified ? "text-emerald-400" : "text-amber-400"}>
+                                                        {qualityScore} / 100
+                                                    </span>
+                                                </div>
+
+                                                {/* AI Verification Badge for score >= 80 */}
+                                                {isVerified && (
+                                                    <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                                                        Fast-Track Verified
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <p className="text-slate-400 text-sm">
+                                                by {track.artist_name || 'Unknown Artist'} • {track.genre || 'Unspecified Genre'} • {track.bpm ? `${track.bpm} BPM` : 'BPM pending'}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3 className="text-white font-bold text-lg">{track.title}</h3>
-                                        <p className="text-slate-400 text-sm">
-                                            by {track.artist_name || 'Unknown'} • {track.genre || 'No genre'}
-                                        </p>
+
+                                    <div className="flex items-center gap-3 self-end md:self-center">
+                                        {/* Play Preview */}
+                                        <button
+                                            onClick={() => track.file_url && playTracks([{
+                                                id: track.id,
+                                                title: track.title,
+                                                artist: track.artist_name || 'Unknown Artist',
+                                                url: track.file_url,
+                                            }], 0)}
+                                            disabled={!track.file_url}
+                                            className="size-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all disabled:opacity-40"
+                                            title="Preview Track"
+                                        >
+                                            <Play className="size-4 text-white" />
+                                        </button>
+
+                                        {/* Mark Under Review */}
+                                        <button
+                                            onClick={() => handleMarkReview(track.id)}
+                                            disabled={processingId === track.id}
+                                            className="px-4 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-xl font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+                                        >
+                                            Review
+                                        </button>
+
+                                        {/* Reject */}
+                                        <button
+                                            onClick={() => setShowRejectModal(track.id)}
+                                            disabled={processingId === track.id}
+                                            className="px-4 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-xl font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+                                        >
+                                            Reject
+                                        </button>
+
+                                        {/* Approve / Fast-Track Approve */}
+                                        <button
+                                            onClick={() => handleApprove(track.id)}
+                                            disabled={processingId === track.id}
+                                            className={cn(
+                                                "px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer shadow-lg",
+                                                isVerified
+                                                    ? "bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+                                                    : "bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30"
+                                            )}
+                                        >
+                                            {processingId === track.id ? (
+                                                <Loader2 className="size-4 animate-spin" />
+                                            ) : isVerified ? (
+                                                <span className="material-symbols-outlined text-base">bolt</span>
+                                            ) : (
+                                                <span className="material-symbols-outlined text-base">check</span>
+                                            )}
+                                            {isVerified ? 'Fast-Track Approve' : 'Approve'}
+                                        </button>
                                     </div>
                                 </div>
-
-                                <div className="flex items-center gap-3">
-                                    {/* Play Preview */}
-                                    <button
-                                        onClick={() => track.file_url && playTracks([{
-                                            id: track.id,
-                                            title: track.title,
-                                            artist: track.artist_name || 'Unknown Artist',
-                                            url: track.file_url,
-                                        }], 0)}
-                                        disabled={!track.file_url}
-                                        className="size-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all disabled:opacity-40"
-                                        title="Preview"
-                                    >
-                                        <Play className="size-4 text-white" />
-                                    </button>
-
-                                    {/* Mark Under Review */}
-                                    <button
-                                        onClick={() => handleMarkReview(track.id)}
-                                        disabled={processingId === track.id}
-                                        className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
-                                    >
-                                        Review
-                                    </button>
-
-                                    {/* Reject */}
-                                    <button
-                                        onClick={() => setShowRejectModal(track.id)}
-                                        disabled={processingId === track.id}
-                                        className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
-                                    >
-                                        Reject
-                                    </button>
-
-                                    {/* Approve */}
-                                    <button
-                                        onClick={() => handleApprove(track.id)}
-                                        disabled={processingId === track.id}
-                                        className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 flex items-center gap-2"
-                                    >
-                                        {processingId === track.id ? (
-                                            <span className="animate-spin">⏳</span>
-                                        ) : (
-                                            <span className="material-symbols-outlined text-lg">check</span>
-                                        )}
-                                        Approve
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

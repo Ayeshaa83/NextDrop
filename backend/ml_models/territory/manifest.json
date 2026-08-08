@@ -1,0 +1,12 @@
+{
+  "feature_names": [
+    "current_streams",
+    "wow_growth",
+    "save_rate",
+    "reels_velocity",
+    "engagement_per_stream",
+    "normalized_slope",
+    "genre_affinity"
+  ],
+  "mae": 2.29
+}

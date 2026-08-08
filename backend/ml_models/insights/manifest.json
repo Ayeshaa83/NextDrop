@@ -1,0 +1,40 @@
+{
+  "feature_names": [
+    "current_streams",
+    "sma_2w",
+    "sma_4w",
+    "sma_ratio",
+    "wow_stream_growth",
+    "mow_stream_growth",
+    "wow_save_growth",
+    "wow_ugc_growth",
+    "save_rate_current",
+    "save_rate_change",
+    "ugc_per_1k_streams",
+    "playlist_add_conversion",
+    "stream_slope_normalized",
+    "top_platform_share"
+  ],
+  "classes": [
+    "breakout_momentum",
+    "declining_trajectory",
+    "high_retention_passion",
+    "low_saving_conversion",
+    "platform_concentrated",
+    "playlist_dependent",
+    "steady_growth",
+    "untapped_curation_potential",
+    "viral_ugc_driven"
+  ],
+  "insight_categories": {
+    "breakout_momentum": "growth_trajectory",
+    "steady_growth": "growth_trajectory",
+    "declining_trajectory": "growth_trajectory",
+    "viral_ugc_driven": "platform_dynamics",
+    "platform_concentrated": "platform_dynamics",
+    "high_retention_passion": "engagement_quality",
+    "low_saving_conversion": "engagement_quality",
+    "playlist_dependent": "curation_impact",
+    "untapped_curation_potential": "curation_impact"
+  }
+}

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useUploadStore } from '@/lib/uploadStore';
 import AudioDNARadar from '@/components/ai/AudioDNARadar';
 import AIMetadataSuggestor from '@/components/ai/AIMetadataSuggestor';
+import ReleaseTimerDial from '@/components/ai/ReleaseTimerDial';
 import { analyzeApi, tracksApi, storageApi, ApiError } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -353,10 +354,10 @@ export default function UploadReleasePage() {
                     {/* A. AI Metadata */}
                     <section className="p-8 rounded-3xl border border-white/[0.04] bg-[#0a0a0b]/40 backdrop-blur-md relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-3xl rounded-full pointer-events-none" />
-                        <div className="flex items-center justify-between gap-3 border-b border-primary/10 pb-4 mb-6">
+                        <div className="flex flex-col gap-4 border-b border-primary/10 pb-4 mb-6">
                             <div className="flex items-center gap-3">
                                 <Sparkles className="size-4 text-primary" />
-                                <h3 className="text-xs font-black uppercase tracking-widest text-primary">Smart-Fill Metadata</h3>
+                                <h3 className="text-xs font-black uppercase tracking-widest text-primary">Smart-Fill Metadata & AI Quality Score</h3>
                             </div>
                             <AIMetadataSuggestor
                                 title={store.profMeta.title || store.file?.name?.replace(/\.[^/.]+$/, '') || ''}
@@ -369,6 +370,13 @@ export default function UploadReleasePage() {
                                         key: s.key,
                                     });
                                 }}
+                                onAddChip={(tag, type) => {
+                                    if (type === 'genre') {
+                                        store.setMetadata({ genre: tag });
+                                    } else {
+                                        store.setMetadata({ mood: tag });
+                                    }
+                                }}
                             />
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
@@ -379,11 +387,11 @@ export default function UploadReleasePage() {
                         </div>
                     </section>
 
-                    {/* B. Professional Metadata */}
-                    <section className="p-8 rounded-3xl bg-[#0a0a0b]/40 border border-white/[0.04] backdrop-blur-md">
-                        <div className="flex items-center gap-3 border-b border-white/[0.06] pb-4 mb-6">
+                    {/* B. Professional Metadata & Release Timing */}
+                    <section className="p-8 rounded-3xl bg-[#0a0a0b]/40 border border-white/[0.04] backdrop-blur-md space-y-6">
+                        <div className="flex items-center gap-3 border-b border-white/[0.06] pb-4">
                             <Shield className="size-4 text-slate-500" />
-                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Professional Data</h3>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Professional Data & Scheduling</h3>
                         </div>
                         <div className="space-y-4">
                             <FormInput label="Track Title" value={store.profMeta.title} onChange={v => store.setProfMeta({ title: v })} placeholder="Original Mix" disabled={isAnalyzing} />
@@ -392,7 +400,7 @@ export default function UploadReleasePage() {
                                 <FormToggle label="Explicit Content" value={store.profMeta.explicit} onChange={v => store.setProfMeta({ explicit: v })} disabled={isAnalyzing} />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start pt-2">
                                 {/* Cover Artwork */}
                                 <div className={cn("space-y-2", isAnalyzing && "opacity-50 pointer-events-none")}>
                                     <label className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
@@ -421,11 +429,11 @@ export default function UploadReleasePage() {
                                     )}
                                 </div>
 
-                                {/* Release Scheduling */}
+                                {/* Release Scheduling Input */}
                                 <div className={cn("space-y-2", isAnalyzing && "opacity-50 pointer-events-none")}>
                                     <label className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
                                         <CalendarClock className="size-3 text-slate-600" />
-                                        Scheduled Release <span className="tracking-normal normal-case font-medium text-slate-600">(blank = release now)</span>
+                                        Scheduled Release Date
                                     </label>
                                     <input
                                         type="datetime-local"
@@ -436,6 +444,15 @@ export default function UploadReleasePage() {
                                         className="w-full h-[52px] bg-[#070708] border border-white/[0.06] rounded-xl px-5 text-white focus:outline-none focus:border-primary/50 text-sm font-bold transition-all [color-scheme:dark]"
                                     />
                                 </div>
+                            </div>
+
+                            {/* Smart Release Recommendation Component */}
+                            <div className="pt-4">
+                                <ReleaseTimerDial
+                                    genre={store.metadata.genre}
+                                    targetMarket="india_domestic"
+                                    plannedLeadTimeDays={14}
+                                />
                             </div>
 
                             {duration !== null && (

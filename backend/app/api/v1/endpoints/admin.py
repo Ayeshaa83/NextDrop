@@ -33,6 +33,8 @@ class TrackApprovalResponse(BaseModel):
     approved_by_id: Optional[int] = None
     approved_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    metadata_quality_score: Optional[float] = None
+    ai_verified: bool = False
 
     class Config:
         from_attributes = True
@@ -122,7 +124,18 @@ def get_pending_tracks(
             approval_notes=track.approval_notes,
             approved_by_id=track.approved_by_id,
             approved_at=track.approved_at,
-            created_at=None  # Track model doesn't have created_at yet
+            created_at=None,  # Track model doesn't have created_at yet
+            metadata_quality_score=(
+                float(track.ai_analysis.get("metadata_quality_score"))
+                if isinstance(track.ai_analysis, dict)
+                and isinstance(track.ai_analysis.get("metadata_quality_score"), (int, float))
+                else None
+            ),
+            ai_verified=(
+                isinstance(track.ai_analysis, dict)
+                and isinstance(track.ai_analysis.get("metadata_quality_score"), (int, float))
+                and float(track.ai_analysis.get("metadata_quality_score")) >= 80.0
+            ),
         )
         items.append(item)
     
@@ -162,7 +175,18 @@ def get_all_tracks_admin(
             approval_notes=track.approval_notes,
             approved_by_id=track.approved_by_id,
             approved_at=track.approved_at,
-            created_at=None
+            created_at=None,
+            metadata_quality_score=(
+                float(track.ai_analysis.get("metadata_quality_score"))
+                if isinstance(track.ai_analysis, dict)
+                and isinstance(track.ai_analysis.get("metadata_quality_score"), (int, float))
+                else None
+            ),
+            ai_verified=(
+                isinstance(track.ai_analysis, dict)
+                and isinstance(track.ai_analysis.get("metadata_quality_score"), (int, float))
+                and float(track.ai_analysis.get("metadata_quality_score")) >= 80.0
+            ),
         )
         items.append(item)
     
@@ -244,7 +268,18 @@ def approve_track(
         approval_notes=track.approval_notes,
         approved_by_id=track.approved_by_id,
         approved_at=track.approved_at,
-        created_at=None
+        created_at=None,
+        metadata_quality_score=(
+            float(track.ai_analysis.get("metadata_quality_score"))
+            if isinstance(track.ai_analysis, dict)
+            and isinstance(track.ai_analysis.get("metadata_quality_score"), (int, float))
+            else None
+        ),
+        ai_verified=(
+            isinstance(track.ai_analysis, dict)
+            and isinstance(track.ai_analysis.get("metadata_quality_score"), (int, float))
+            and float(track.ai_analysis.get("metadata_quality_score")) >= 80.0
+        ),
     )
 
 
@@ -281,7 +316,18 @@ def mark_under_review(
         approval_notes=track.approval_notes,
         approved_by_id=track.approved_by_id,
         approved_at=track.approved_at,
-        created_at=None
+        created_at=None,
+        metadata_quality_score=(
+            float(track.ai_analysis.get("metadata_quality_score"))
+            if isinstance(track.ai_analysis, dict)
+            and isinstance(track.ai_analysis.get("metadata_quality_score"), (int, float))
+            else None
+        ),
+        ai_verified=(
+            isinstance(track.ai_analysis, dict)
+            and isinstance(track.ai_analysis.get("metadata_quality_score"), (int, float))
+            and float(track.ai_analysis.get("metadata_quality_score")) >= 80.0
+        ),
     )
 
 

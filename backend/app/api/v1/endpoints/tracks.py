@@ -57,20 +57,11 @@ async def analyze_uploaded_file(
 
         logger.info(f"Saved uploaded file to {temp_path} ({len(content)} bytes)")
 
-        # ── Run Musicnn tagger (subprocess, isolated) ──────────────────
-        musicnn_result = None
-        try:
-            import sys
-            sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-            from ai_engine.runner import run_musicnn_tagger
-            musicnn_result = run_musicnn_tagger(temp_path)
-            logger.info(f"Musicnn result: {len(musicnn_result.get('tags_raw', []))} tags")
-        except Exception as e:
-            logger.warning(f"Musicnn tagger failed (non-fatal): {e}")
-            musicnn_result = {
-                "tags_raw": [], "genre": [], "style": [], "mood": [],
-                "instruments": [], "vocals": [], "error": str(e)
-            }
+        # ── Musicnn tagger removed (using PANNs/XGBoost instead) ──────────
+        musicnn_result = {
+            "tags_raw": [], "genre": [], "style": [], "mood": [],
+            "instruments": [], "vocals": [], "error": None
+        }
 
         # ── Run XGBoost feature extraction + hit prediction ────────────
         xgboost_result = {}

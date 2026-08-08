@@ -15,6 +15,7 @@ import {
 import SmartInsightCard from '@/components/ai/SmartInsightCard';
 import ReleaseTimerDial from '@/components/ai/ReleaseTimerDial';
 import TerritoryGrowthMap from '@/components/ai/TerritoryGrowthMap';
+import AudioDNARadar from '@/components/ai/AudioDNARadar';
 
 // ISO country code -> display name
 const countryName = (code: string) => {
@@ -119,13 +120,18 @@ export default function AnalyticsDashboard() {
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
                         <SmartInsightCard
-                            trackTitle="Your Catalog"
+                            trackTitle="Catalog Performance"
                             currentStreams={lastWeek || dashboard?.total_streams || 0}
                             previousStreams={prevWeek || 0}
                         />
                         <TerritoryGrowthMap />
                     </div>
                 </div>
+            </motion.div>
+
+            {/* Audio DNA Signature Section */}
+            <motion.div variants={item}>
+                <AudioDNARadar trackTitle="Neon Drive" />
             </motion.div>
 
             {/* 2. API-Driven Performance Suite */}

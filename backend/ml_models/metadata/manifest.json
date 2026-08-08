@@ -1,0 +1,51 @@
+{
+  "labels": [
+    "acoustic_guitar",
+    "ambient",
+    "bass",
+    "chill",
+    "classical",
+    "drums",
+    "electric_guitar",
+    "electronic",
+    "energetic",
+    "happy",
+    "hip_hop",
+    "jazz",
+    "piano",
+    "pop",
+    "r_and_b",
+    "reggae",
+    "rock",
+    "strings",
+    "synthesizer"
+  ],
+  "thresholds": {
+    "acoustic_guitar": 0.2,
+    "ambient": 0.15,
+    "bass": 0.15,
+    "chill": 0.15,
+    "classical": 0.15,
+    "drums": 0.15,
+    "electric_guitar": 0.15,
+    "electronic": 0.15,
+    "energetic": 0.15,
+    "happy": 0.15,
+    "hip_hop": 0.25,
+    "jazz": 0.15,
+    "piano": 0.15,
+    "pop": 0.15,
+    "r_and_b": 0.15,
+    "reggae": 0.15,
+    "rock": 0.15,
+    "strings": 0.15,
+    "synthesizer": 0.15
+  },
+  "metrics": {
+    "micro_f1": 0.2494,
+    "macro_f1": 0.1054,
+    "precision_at_5": 0.5274
+  },
+  "num_train_samples": 28502,
+  "num_val_samples": 9718
+}

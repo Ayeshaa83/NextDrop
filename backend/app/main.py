@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-load_dotenv()  # populate os.environ from .env — app/storage/config.py reads it directly via os.getenv()
+load_dotenv()  
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +17,8 @@ from app.api.v1.endpoints import (
 from app import models  # noqa: F401 — ensures models are registered with SQLAlchemy
 from app.sec.rate_limiter import limiter  # noqa: imported here for app.state binding
 
+from app.api.ai_features import router as ai_router
+
 # ── Rate Limiter ─────────────────────────────────────────────────────────────
 # limiter singleton is defined in app.sec.rate_limiter to avoid circular imports
 
@@ -29,6 +31,9 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+# Custom ML engines router (metadata/insights/territory/release timing)
+app.include_router(ai_router, prefix="/api")
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 origins = [
@@ -85,9 +90,8 @@ app.include_router(youtube_auth.router, prefix="/api/v1/youtube", tags=["YouTube
 # ── Integrations Hub (Platform Registry) ─────────────────────────────────────
 app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["Integrations"])
 
-# ── AI-Powered Features ───────────────────────────────────────────────────────
+# ── Old AI Features Router (handles legacy frontend calls like audio-dna/trends) ──
 app.include_router(ai_features.router, prefix="/api/ai", tags=["AI Features"])
-
 
 # ── Health / Root ─────────────────────────────────────────────────────────────
 

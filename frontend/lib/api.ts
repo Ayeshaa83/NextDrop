@@ -2,7 +2,6 @@
  * NextDrop API Service Layer
  * Handles all communication with the FastAPI backend
  */
-
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Paginated response type (matches backend PaginatedResponse)
@@ -634,6 +633,9 @@ export interface PendingTrack {
   artist_name: string | null;
   file_url: string;
   genre: string | null;
+  bpm: number | null;
+  duration: number | null;
+  quality_score?: number | null;
   approval_status: string;
   approval_notes: string | null;
   approved_by_id: number | null;
@@ -1417,4 +1419,40 @@ export interface AudioDNAData {
   categories: AudioDNACategory[];
   overall_quality: number;
 }
-
+
+export async function fetchAIMetadataSuggestions(trackId: string) {
+  const res = await fetch(`${API_BASE_URL}/api/ai/metadata-suggest/${trackId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error('Failed to fetch metadata suggestions');
+  return res.json();
+}
+
+export async function fetchAIPerformanceInsights(trackId: string) {
+  const res = await fetch(`${API_BASE_URL}/api/ai/performance-insights/${trackId}`);
+  if (!res.ok) throw new Error('Failed to fetch performance insights');
+  return res.json();
+}
+
+export async function fetchAITerritoryGrowthMap(trackId: string) {
+  const res = await fetch(`${API_BASE_URL}/api/ai/territory-growth/${trackId}`);
+  if (!res.ok) throw new Error('Failed to fetch territory growth map');
+  return res.json();
+}
+
+export async function fetchAIReleaseTiming(payload: {
+  track_id: string;
+  genre: string;
+  target_market: string;
+  planned_lead_time_days: number;
+}) {
+  const res = await fetch(`${API_BASE_URL}/api/ai/release-timer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to fetch release timing recommendation');
+  return res.json();
+}
+

@@ -1,0 +1,41 @@
+{
+  "genres": {
+    "genre---rock": "rock",
+    "genre---pop": "pop",
+    "genre---hiphop": "hip_hop",
+    "genre---electronic": "electronic",
+    "genre---house": "electronic",
+    "genre---techno": "electronic",
+    "genre---ambient": "ambient",
+    "genre---jazz": "jazz",
+    "genre---classical": "classical",
+    "genre---reggae": "reggae",
+    "genre---metal": "rock",
+    "genre---funk": "r_and_b",
+    "genre---soul": "r_and_b"
+  },
+  "moods": {
+    "mood/theme---energetic": "energetic",
+    "mood/theme---energy": "energetic",
+    "mood/theme---action": "energetic",
+    "mood/theme---calm": "chill",
+    "mood/theme---relaxing": "chill",
+    "mood/theme---chillout": "chill",
+    "mood/theme---happy": "happy",
+    "mood/theme---sad": "sad",
+    "mood/theme---dark": "dark",
+    "mood/theme---romantic": "romantic",
+    "mood/theme---dramatic": "dramatic"
+  },
+  "instruments": {
+    "instrument---electricguitar": "electric_guitar",
+    "instrument---acousticguitar": "acoustic_guitar",
+    "instrument---piano": "piano",
+    "instrument---synthesizer": "synthesizer",
+    "instrument---synth": "synthesizer",
+    "instrument---drums": "drums",
+    "instrument---bass": "bass",
+    "instrument---strings": "strings",
+    "instrument---violin": "strings"
+  }
+}

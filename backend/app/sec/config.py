@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # Simulation Mode
     DEMO_MODE: bool = True
 
+    # ISRC Defaults
+    ISRC_COUNTRY_CODE: str = "IN"
+    ISRC_REGISTRANT_CODE: str = "ND1"
+
     # LLM insights (Claude API). Empty = heuristic fallbacks are used.
     ANTHROPIC_API_KEY: str = ""
     INSIGHTS_MODEL: str = "claude-sonnet-5"

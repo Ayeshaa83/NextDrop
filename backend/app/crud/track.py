@@ -47,7 +47,11 @@ def count_public_tracks_by_artist(db: Session, artist_id: int) -> int:
         .scalar()
     )
 
+from app.services.isrc_generator import generate_next_isrc
+
 def create_track(db: Session, track_in: TrackCreate, artist_id: int):
+    isrc_value = track_in.isrc.strip() if track_in.isrc and track_in.isrc.strip() else generate_next_isrc(db)
+
     db_track = Track(
         artist_id=artist_id,
         title=track_in.title,
@@ -57,7 +61,7 @@ def create_track(db: Session, track_in: TrackCreate, artist_id: int):
         genre=track_in.genre,
         bpm=track_in.bpm,
         is_public=track_in.is_public,
-        isrc=track_in.isrc,
+        isrc=isrc_value,
         is_explicit=track_in.is_explicit,
         release_date=track_in.release_date,
     )
