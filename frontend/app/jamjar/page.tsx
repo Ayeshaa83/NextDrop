@@ -18,6 +18,7 @@ import {
     UploadCloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import SessionErrorBanner from '@/components/SessionErrorBanner';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { usePlayer } from '@/lib/playerStore';
@@ -59,10 +60,15 @@ function PostCard({
         : 'idle';
     const [collabStatus, setCollabStatus] = useState<'idle' | 'sending' | 'pending' | 'accepted' | 'error'>(initialCollabStatus);
     const [shareCopied, setShareCopied] = useState(false);
-    const { playTracks, currentTrack, isPlaying } = usePlayer();
+    const { playTracks, currentTrack, isPlaying, toggle } = usePlayer();
 
     const handlePlaySnippet = () => {
         if (!localPost.track?.file_url) return;
+        // Already loaded — toggle pause/resume instead of restarting from 0.
+        if (currentTrack?.id === localPost.track.id) {
+            toggle();
+            return;
+        }
         playTracks([{
             id: localPost.track.id,
             title: localPost.track.title,
@@ -574,7 +580,7 @@ function CreatePostModal({
 
 export default function JamJarFeed() {
     const { user, artist, isLoading: authLoading } = useRequireAuth();
-    const { data: feedData, loading: feedLoading, refetch } = useFeed();
+    const { data: feedData, loading: feedLoading, error: feedError, isAuthError, refetch } = useFeed();
     const [showCreateModal, setShowCreateModal] = useState(false);
 
     const loading = authLoading || feedLoading;
@@ -653,7 +659,9 @@ export default function JamJarFeed() {
                 variants={item}
                 className="space-y-6"
             >
-                {posts.length === 0 ? (
+                {feedError ? (
+                    <SessionErrorBanner isAuthError={isAuthError} onRetry={refetch} />
+                ) : posts.length === 0 ? (
                     <div className="card-premium p-20 text-center space-y-4">
                         <div className="size-16 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center mx-auto text-slate-500">
                             <Zap className="size-8" />

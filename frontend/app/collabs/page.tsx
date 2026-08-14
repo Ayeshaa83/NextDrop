@@ -21,6 +21,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { cn, downloadFile } from '@/lib/utils';
 import CollabChat from '@/components/CollabChat';
+import SessionErrorBanner from '@/components/SessionErrorBanner';
 import { DEFAULT_AVATAR as FALLBACK_AVATAR } from '@/lib/avatar';
 import { usePlayer } from '@/lib/playerStore';
 
@@ -28,7 +29,7 @@ import { usePlayer } from '@/lib/playerStore';
 // collaboration, regardless of which of them owns/uploaded it.
 function CollabTrackControls({ trackId, artistName }: { trackId: number; artistName: string }) {
     const { data: track } = useTrack(trackId);
-    const { playTracks, currentTrack, isPlaying } = usePlayer();
+    const { playTracks, currentTrack, isPlaying, toggle } = usePlayer();
     const [downloading, setDownloading] = useState(false);
 
     if (!track) return null;
@@ -49,16 +50,22 @@ function CollabTrackControls({ trackId, artistName }: { trackId: number; artistN
     return (
         <div className="flex items-center gap-1.5 shrink-0">
             <button
-                onClick={() => playTracks([{
-                    id: track.id,
-                    title: track.title,
-                    artist: artistName,
-                    url: track.file_url,
-                    coverUrl: track.cover_art_url || undefined,
-                    duration: track.duration,
-                }], 0)}
+                onClick={() => {
+                    if (currentTrack?.id === track.id) {
+                        toggle();
+                        return;
+                    }
+                    playTracks([{
+                        id: track.id,
+                        title: track.title,
+                        artist: artistName,
+                        url: track.file_url,
+                        coverUrl: track.cover_art_url || undefined,
+                        duration: track.duration,
+                    }], 0);
+                }}
                 disabled={!track.file_url}
-                title="Play"
+                title={isCurrentlyPlaying ? 'Pause' : 'Play'}
                 className="size-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-300 hover:bg-white/10 hover:text-white transition-all disabled:opacity-40"
             >
                 {isCurrentlyPlaying ? <Pause className="size-3.5 fill-current" /> : <Play className="size-3.5 fill-current" />}
@@ -185,8 +192,8 @@ const COLLAB_STATUS_STYLE: Record<string, string> = {
 
 export default function CollabsPage() {
     const { user, artist, isLoading: authLoading } = useRequireAuth();
-    const { data: myCollabs, loading: mineLoading, refetch: refetchMine } = useMyCollaborations();
-    const { data: pendingCollabs, loading: pendingLoading, refetch: refetchPending } = usePendingCollaborations();
+    const { data: myCollabs, loading: mineLoading, error: mineError, isAuthError: mineAuthError, refetch: refetchMine } = useMyCollaborations();
+    const { data: pendingCollabs, loading: pendingLoading, error: pendingError, isAuthError: pendingAuthError, refetch: refetchPending } = usePendingCollaborations();
     const [respondingId, setRespondingId] = useState<number | null>(null);
     const [activeChat, setActiveChat] = useState<Collaboration | null>(null);
     const [addSongTarget, setAddSongTarget] = useState<Collaboration | null>(null);
@@ -245,13 +252,22 @@ export default function CollabsPage() {
                 </p>
             </motion.header>
 
+            {(mineError || pendingError) && (
+                <motion.div variants={item}>
+                    <SessionErrorBanner
+                        isAuthError={mineAuthError || pendingAuthError}
+                        onRetry={() => { refetchMine(); refetchPending(); }}
+                    />
+                </motion.div>
+            )}
+
             {/* Incoming collab requests */}
             <motion.div variants={item} className="space-y-4">
                 <h2 className="text-xl font-black text-white flex items-center gap-2">
                     <Handshake className="size-5 text-secondary" />
                     Incoming Requests
                 </h2>
-                {pending.length === 0 ? (
+                {pendingError ? null : pending.length === 0 ? (
                     <div className="card-premium p-8 text-center border-dashed border-2 border-white/5">
                         <p className="text-sm text-slate-500 font-medium">No pending collaboration requests.</p>
                     </div>
@@ -306,7 +322,7 @@ export default function CollabsPage() {
                     <Users className="size-5 text-primary" />
                     Your Collaborations
                 </h2>
-                {mine.length === 0 ? (
+                {mineError ? null : mine.length === 0 ? (
                     <div className="card-premium p-14 flex flex-col items-center gap-4 text-center border-dashed border-2 border-white/5">
                         <Users className="size-10 text-slate-600" />
                         <h3 className="text-lg font-black text-white">No collaborations yet</h3>

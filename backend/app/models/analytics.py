@@ -1,7 +1,8 @@
 import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, ForeignKey, Integer, Float, DateTime, Date, JSON
+from sqlalchemy import String, ForeignKey, Integer, Float, Date, JSON
+from app.db.types import UTCDateTime as DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
@@ -13,7 +14,7 @@ class TrackAnalytics(Base):
     __tablename__ = "track_analytics"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"))
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id", ondelete="CASCADE"))
     # Aggregated metrics across platforms
     stream_count: Mapped[int] = mapped_column(Integer, default=0)
     save_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -26,6 +27,10 @@ class TrackAnalytics(Base):
     
     spotify_streams: Mapped[int] = mapped_column(Integer, default=0)
     spotify_saves: Mapped[int] = mapped_column(Integer, default=0)
+    # 0-100 — the only per-track metric Spotify's public Web API actually
+    # exposes without a distributor partnership. spotify_streams/saves above
+    # are always 0 via this integration; this is the real number.
+    spotify_popularity: Mapped[int] = mapped_column(Integer, nullable=True)
     
     # AI-Generated Insights
     hit_score: Mapped[float] = mapped_column(Float, nullable=True) # 0.0 to 100.0
@@ -46,7 +51,7 @@ class AnalyticsSnapshot(Base):
     __tablename__ = "analytics_snapshots"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id", ondelete="CASCADE"), index=True)
     platform: Mapped[str] = mapped_column(String(50), index=True)  # 'youtube', 'spotify', 'other'
     snapshot_date: Mapped[datetime.date] = mapped_column(Date, index=True)
     streams: Mapped[int] = mapped_column(Integer, default=0)

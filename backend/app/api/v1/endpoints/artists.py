@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.api import deps
@@ -7,6 +9,9 @@ from app.crud import track as track_crud
 from app.schemas.artist import ArtistCreate, ArtistUpdate, ArtistResponse, ArtistPublicProfile
 from app.schemas.track import PublicTrackResponse
 from app.models import User, TrackAnalytics
+from app.storage import StorageClient, get_storage_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -45,7 +50,8 @@ def get_my_artist_profile(
 def update_my_artist_profile(
     artist_in: ArtistUpdate,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user)
+    current_user: User = Depends(deps.get_current_active_user),
+    storage: StorageClient = Depends(get_storage_client),
 ):
     """Update the current user's artist profile."""
     artist = artist_crud.get_artist_by_user_id(db, user_id=current_user.id)
@@ -54,7 +60,28 @@ def update_my_artist_profile(
             status_code=404,
             detail="Artist profile not found"
         )
-    return artist_crud.update_artist(db, artist=artist, artist_in=artist_in)
+
+    # Only actually swapping the avatar if the request sets it to something
+    # different — bio/stage_name-only edits shouldn't touch this at all.
+    changing_avatar = (
+        "profile_picture" in artist_in.model_fields_set
+        and artist_in.profile_picture != artist.profile_picture
+    )
+    old_picture = artist.profile_picture if changing_avatar else None
+
+    updated = artist_crud.update_artist(db, artist=artist, artist_in=artist_in)
+
+    if old_picture:
+        # Best-effort — a stale/already-gone/external (e.g. seed) URL should
+        # never fail the profile update itself.
+        old_key = storage.file_key_from_url(old_picture)
+        if old_key:
+            try:
+                storage.delete_file(old_key)
+            except Exception:
+                logger.warning("Failed to delete old avatar %s", old_key, exc_info=True)
+
+    return updated
 
 
 def _to_public_profile(entry: dict) -> ArtistPublicProfile:

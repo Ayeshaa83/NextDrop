@@ -194,7 +194,7 @@ async def refresh_platform_analytics(
                 account.refresh_token = decrypt_token(account.refresh_token)
                 
             stats = await adapter.get_track_analytics(dist.platform_track_id, account)
-            
+
             if dist.platform == "youtube":
                 analytics.youtube_views = stats.views or 0
                 analytics.youtube_likes = stats.likes or 0
@@ -205,8 +205,12 @@ async def refresh_platform_analytics(
                 )
 
             elif dist.platform == "spotify":
+                # streams/saves are always None via the public Web API (no
+                # distributor partnership) — popularity (0-100) is the one
+                # real per-track metric it actually exposes.
                 analytics.spotify_streams = stats.streams or 0
                 analytics.spotify_saves = stats.saves or 0
+                analytics.spotify_popularity = stats.raw.get("popularity")
                 analytics_crud.record_snapshot(
                     db, track_id, "spotify", analytics.spotify_streams, commit=False
                 )
@@ -214,7 +218,13 @@ async def refresh_platform_analytics(
             # Update total aggregates
             analytics.stream_count = (analytics.youtube_views or 0) + (analytics.spotify_streams or 0)
             analytics.save_count = (analytics.youtube_likes or 0) + (analytics.spotify_saves or 0)
-            
+
+            # A successful check should always read as "just checked", even
+            # when the platform reports the same numbers as last time — the
+            # onupdate on last_updated only fires when a column actually
+            # changes, which otherwise left this looking falsely stale.
+            analytics.last_updated = datetime.utcnow()
+
         except Exception as e:
             # Skip this platform if stats fail, move to next
             print(f"Failed to fetch {dist.platform} stats for track {track_id}: {e}")

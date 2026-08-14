@@ -292,28 +292,27 @@ def get_my_leaderboard_position(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """The current artist's own rank, points, and field size."""
+    """The current artist's own rank, points, and field size — live-computed,
+    same as the main leaderboard (see leaderboard_service)."""
     from app.crud import artist as artist_crud
-    from app.models import Leaderboard
+    from app.services import leaderboard_service
 
     artist = artist_crud.get_artist_by_user_id(db, user_id=current_user.id)
-    total = social_crud.count_leaderboard_entries(db, category=category)
+    resolved_category = category or "Top Tracks"
+    total = social_crud.count_leaderboard_entries(db, category=resolved_category)
 
     if not artist:
         return {"ranked": False, "total_artists": total}
 
-    query = db.query(Leaderboard).filter(Leaderboard.artist_id == artist.id)
-    if category:
-        query = query.filter(Leaderboard.category == category)
-    entry = query.order_by(Leaderboard.rank).first()
-
-    if not entry:
+    position = leaderboard_service.get_artist_rank(db, artist.id, resolved_category)
+    if not position:
         return {"ranked": False, "total_artists": total}
 
+    rank, points = position
     return {
         "ranked": True,
-        "rank": entry.rank,
-        "points": entry.points,
-        "category": entry.category,
+        "rank": rank,
+        "points": points,
+        "category": resolved_category,
         "total_artists": total,
     }

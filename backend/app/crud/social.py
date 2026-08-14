@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
-from app.models import Collaboration, Leaderboard, Artist, CollabMessage
+from app.models import Collaboration, Artist, CollabMessage
 from app.models.social import CollaborationStatus
 from app.schemas.social import CollaborationCreate, LeaderboardEntry
+from app.services import leaderboard_service
 
 def _with_relations(query):
     return query.options(
@@ -125,49 +126,25 @@ def get_unread_message_count_for_artist(db: Session, artist_id: int, user_id: in
 
 
 def get_leaderboard(db: Session, category: str = None, skip: int = 0, limit: int = 50):
-    query = db.query(Leaderboard, Artist).join(Artist, Leaderboard.artist_id == Artist.id)
-
-    if category:
-        query = query.filter(Leaderboard.category == category)
-
-    results = query.order_by(Leaderboard.rank).offset(skip).limit(limit).all()
+    """Live-computed standings (see leaderboard_service) rather than a stored
+    table — no upload, distribution, or collaboration can leave this stale
+    because nothing has to remember to write to it. No category defaults to
+    Top Tracks (lifetime streams), the most legible "how big is this artist"
+    signal for an overall view."""
+    ranked = leaderboard_service.compute_ranked_artists(db, category or "Top Tracks")
+    page = ranked[skip:skip + limit]
 
     return [
         LeaderboardEntry(
-            rank=lb.rank,
-            artist_id=lb.artist_id,
+            rank=skip + i + 1,
+            artist_id=artist.id,
             stage_name=artist.stage_name,
-            points=lb.points,
-            profile_picture=artist.profile_picture
+            points=points,
+            profile_picture=artist.profile_picture,
         )
-        for lb, artist in results
+        for i, (artist, points) in enumerate(page)
     ]
 
 def count_leaderboard_entries(db: Session, category: str = None) -> int:
-    """Count leaderboard entries."""
-    query = db.query(func.count(Leaderboard.id))
-    if category:
-        query = query.filter(Leaderboard.category == category)
-    return query.scalar()
-
-def update_leaderboard_entry(db: Session, artist_id: int, category: str, points: int, rank: int):
-    existing = db.query(Leaderboard).filter(
-        Leaderboard.artist_id == artist_id,
-        Leaderboard.category == category
-    ).first()
-
-    if existing:
-        existing.points = points
-        existing.rank = rank
-    else:
-        existing = Leaderboard(
-            artist_id=artist_id,
-            category=category,
-            points=points,
-            rank=rank
-        )
-        db.add(existing)
-
-    db.commit()
-    db.refresh(existing)
-    return existing
+    """Count of artists actually ranked (nonzero activity) in this category."""
+    return len(leaderboard_service.compute_ranked_artists(db, category or "Top Tracks"))

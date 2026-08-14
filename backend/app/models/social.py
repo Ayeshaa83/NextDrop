@@ -2,7 +2,8 @@
 Social Models for NextDrop Feed System.
 Handles social posts, comments, likes (hypes), and collaborations.
 """
-from sqlalchemy import String, ForeignKey, Text, Enum, Integer, DateTime, UniqueConstraint
+from sqlalchemy import String, ForeignKey, Text, Enum, Integer, UniqueConstraint
+from app.db.types import UTCDateTime as DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
@@ -40,7 +41,7 @@ class SocialPost(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     artist_id: Mapped[int] = mapped_column(ForeignKey("artists.id"), index=True)
-    track_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tracks.id"), nullable=True, index=True)
+    track_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tracks.id", ondelete="SET NULL"), nullable=True, index=True)
     
     content: Mapped[str] = mapped_column(Text)  # Post text/caption
     post_type: Mapped[str] = mapped_column(
@@ -107,7 +108,7 @@ class Collaboration(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     initiator_id: Mapped[int] = mapped_column(ForeignKey("artists.id"), index=True)
     collaborator_id: Mapped[int] = mapped_column(ForeignKey("artists.id"), index=True)
-    track_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tracks.id"), nullable=True)
+    track_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tracks.id", ondelete="SET NULL"), nullable=True)
     post_id: Mapped[Optional[int]] = mapped_column(ForeignKey("social_posts.id"), nullable=True)  # Source post if from feed
     
     status: Mapped[str] = mapped_column(

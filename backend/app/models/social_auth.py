@@ -3,7 +3,8 @@ Social Authentication Models
 Stores OAuth tokens for connected services (Spotify, YouTube, etc.)
 Also stores cached stats to avoid API quota limits.
 """
-from sqlalchemy import String, Text, ForeignKey, DateTime, Integer, BigInteger, JSON, UniqueConstraint
+from sqlalchemy import String, Text, ForeignKey, Integer, BigInteger, JSON, UniqueConstraint
+from app.db.types import UTCDateTime as DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base

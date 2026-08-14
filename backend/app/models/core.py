@@ -1,4 +1,5 @@
-from sqlalchemy import String, Boolean, ForeignKey, DateTime, Text, Enum as SQLEnum
+from sqlalchemy import String, Boolean, ForeignKey, Text, Enum as SQLEnum
+from app.db.types import UTCDateTime as DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base

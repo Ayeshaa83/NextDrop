@@ -1,5 +1,6 @@
-from sqlalchemy import String, ForeignKey, Integer, DateTime, Enum, JSON, Text
+from sqlalchemy import String, ForeignKey, Integer, Enum, JSON, Text
 from sqlalchemy import text
+from app.db.types import UTCDateTime as DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
@@ -32,7 +33,7 @@ class AlbumTrack(Base):
     __tablename__ = "album_tracks"
     
     album_id: Mapped[int] = mapped_column(ForeignKey("albums.id"), primary_key=True)
-    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), primary_key=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id", ondelete="CASCADE"), primary_key=True)
     position: Mapped[int] = mapped_column(Integer, default=1) # Track order in album
 
 class Album(Base):
@@ -92,15 +93,19 @@ class Track(Base):
     albums: Mapped[list["Album"]] = relationship(secondary="album_tracks", back_populates="tracks")
     
     # Social relationships
-    social_posts: Mapped[list["SocialPost"]] = relationship(back_populates="track")
-    collaborations: Mapped[list["Collaboration"]] = relationship(back_populates="track")
-    split_sheets: Mapped[list["TrackCollaborator"]] = relationship(back_populates="track")
+    # passive_deletes=True defers to each FK's own ondelete behavior (CASCADE
+    # for split_sheets, SET NULL for social_posts/collaborations — see their
+    # ForeignKey() declarations) instead of SQLAlchemy issuing its own
+    # UPDATE/DELETE statements first, which could otherwise conflict with it.
+    social_posts: Mapped[list["SocialPost"]] = relationship(back_populates="track", passive_deletes=True)
+    collaborations: Mapped[list["Collaboration"]] = relationship(back_populates="track", passive_deletes=True)
+    split_sheets: Mapped[list["TrackCollaborator"]] = relationship(back_populates="track", passive_deletes=True)
 
 class TrackCollaborator(Base):
     __tablename__ = "track_collaborators"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"))
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id", ondelete="CASCADE"))
     # Nullable: external collaborators (no NextDrop account) are stored by name only.
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     display_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -131,7 +136,7 @@ class TrackDistribution(Base):
     __tablename__ = "track_distributions"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id", ondelete="CASCADE"), index=True)
     artist_id: Mapped[int] = mapped_column(ForeignKey("artists.id"), index=True)
 
     # Platform identifier — must match the platform registry key

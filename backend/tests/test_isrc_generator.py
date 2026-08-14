@@ -2,8 +2,7 @@ import datetime
 import pytest
 from app.crud.track import create_track
 from app.schemas.track import TrackCreate
-from app.models.artist import Artist
-from app.models.user import User, UserRole
+from app.models import Artist, User, UserRole
 from app.services.isrc_generator import generate_next_isrc
 
 def test_manual_isrc_preserved(db):

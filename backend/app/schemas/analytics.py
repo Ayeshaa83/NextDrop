@@ -13,6 +13,15 @@ class TrackAnalyticsResponse(BaseModel):
     sentiment_data: Optional[Dict[str, Any]] = None
     last_updated: datetime
 
+    # Per-platform — real data, kept separate rather than only the merged
+    # totals above, since YouTube and Spotify measure genuinely different
+    # things (YouTube: views/likes/comments; Spotify: a 0-100 popularity
+    # score, the only per-track metric its public API exposes).
+    youtube_views: int = 0
+    youtube_likes: int = 0
+    youtube_comments: int = 0
+    spotify_popularity: Optional[int] = None
+
     class Config:
         from_attributes = True
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { tracksApi, albumsApi, analyticsApi, socialApi, artistApi, adminApi, feedApi, earningsApi, notificationsApi, Track, Album, DashboardData, TrackAnalytics, LeaderboardEntry, Artist, Collaboration, AdminStats, PendingTrack, SocialPost, PostType } from './api';
+import { tracksApi, albumsApi, analyticsApi, socialApi, artistApi, adminApi, feedApi, earningsApi, notificationsApi, ApiError, Track, Album, DashboardData, TrackAnalytics, LeaderboardEntry, Artist, Collaboration, AdminStats, PendingTrack, SocialPost, PostType } from './api';
 import type { ArtistPublicProfile, PublicTrack, PaginatedResponse } from './api';
 
 // Generic data fetching hook
@@ -12,15 +12,21 @@ function useApiData<T>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Distinguishes "your session is gone" from "the request failed" — a 401
+  // here means the page rendered before (or instead of) useRequireAuth's
+  // redirect kicking in, not that the underlying data is actually empty.
+  const [isAuthError, setIsAuthError] = useState(false);
 
   const refetch = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setIsAuthError(false);
     try {
       const result = await fetcher();
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
+      setIsAuthError(err instanceof ApiError && err.status === 401);
     } finally {
       setLoading(false);
     }
@@ -30,7 +36,7 @@ function useApiData<T>(
     refetch();
   }, [refetch]);
 
-  return { data, loading, error, refetch };
+  return { data, loading, error, isAuthError, refetch };
 }
 
 // ============ TRACK HOOKS ============

@@ -9,7 +9,17 @@ def get_track_by_id(db: Session, track_id: int):
     return db.query(Track).filter(Track.id == track_id).first()
 
 def get_tracks_by_artist(db: Session, artist_id: int, skip: int = 0, limit: int = 100):
-    return db.query(Track).filter(Track.artist_id == artist_id).offset(skip).limit(limit).all()
+    # Newest first — without an explicit order, Postgres makes no guarantee
+    # about row order, which left the dashboard's "Now Tracking" headline
+    # (myTracks[0]) showing an effectively arbitrary track.
+    return (
+        db.query(Track)
+        .filter(Track.artist_id == artist_id)
+        .order_by(Track.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 def count_tracks_by_artist(db: Session, artist_id: int) -> int:
     return db.query(func.count(Track.id)).filter(Track.artist_id == artist_id).scalar()
@@ -22,6 +32,7 @@ def get_all_public_tracks(db: Session, skip: int = 0, limit: int = 100):
     return (
         db.query(Track)
         .filter(Track.is_public == True, _released_filter())
+        .order_by(Track.created_at.desc())
         .offset(skip).limit(limit).all()
     )
 

@@ -44,3 +44,15 @@ watchfiles==1.1.1
 websockets==16.0
 anthropic
 pytest
+
+# Rate limiting (app/sec/rate_limiter.py, imported by app/main.py)
+slowapi==0.1.10
+# Pydantic EmailStr validation (app/schemas/user.py)
+email-validator==2.3.0
+# ML pipeline (app/ml/, app/api/ai_features.py) — pandas/scikit-learn feed
+# feature extraction, xgboost loads the hit-score model at import time
+pandas==3.0.5
+scikit-learn==1.9.0
+xgboost==3.4.0
+# LLM-backed insight generation (app/ml/insights/llm_generator.py)
+huggingface_hub==1.27.0

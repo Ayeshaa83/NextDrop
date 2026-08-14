@@ -143,6 +143,31 @@ class PlatformInterface(ABC):
             f"{self.platform_name} analytics are not implemented yet."
         )
 
+    # ── Removal ───────────────────────────────────────────────────────────────
+    # Two distinct, deliberately different-severity actions. Adapters that
+    # don't support distribution don't need to implement either.
+
+    async def unpublish(self, platform_track_id: str, account: SocialAccount) -> bool:
+        """
+        Reversible takedown — make the live content private/unlisted rather
+        than removing it. The artist (or NextDrop) can restore it later
+        without re-uploading. Used by the "Unpublish" action, which keeps
+        the track's own record and history intact on our side too.
+        """
+        raise NotImplementedError(
+            f"{self.platform_name} does not support unpublishing."
+        )
+
+    async def delete_content(self, platform_track_id: str, account: SocialAccount) -> bool:
+        """
+        Permanent, irreversible removal from the platform. Used only by the
+        "Hard Delete" action — the platform-side counterpart to actually
+        deleting the track's own record.
+        """
+        raise NotImplementedError(
+            f"{self.platform_name} does not support deletion."
+        )
+
 
 # ── Shared result types (imported by all adapters) ────────────────────────────
 

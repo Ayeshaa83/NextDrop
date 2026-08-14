@@ -1,17 +1,22 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, UploadFile, File
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from app.api import deps
 from app.api.pagination import PaginationParams, PaginatedResponse, paginate
 from app.crud import track as track_crud
 from app.crud import artist as artist_crud
 from app.schemas.track import (
-    TrackCreate, TrackUpdate, TrackResponse, 
+    TrackCreate, TrackUpdate, TrackResponse,
     TrackProcessingStatus, AIAnalysisResponse,
     AnalyzeFileResponse
 )
-from app.models import User
+from app.models import User, TrackDistribution, DistributionStatus
 from app.processing.tasks import process_track_analysis
+from app.platforms.registry import registry
+from app.services.platform_accounts import get_ready_account
+from app.services.earnings_service import compute_artist_earnings
+from app.storage import StorageClient, get_storage_client
 import tempfile
 import os
 import logging
@@ -300,20 +305,160 @@ def update_track(
     
     return track_crud.update_track(db, track=track, track_in=track_in)
 
-@router.delete("/{track_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_track(
+class PlatformActionResult(BaseModel):
+    platform: str
+    success: bool
+    error: Optional[str] = None
+
+
+class UnpublishResponse(BaseModel):
+    track: TrackResponse
+    platforms: List[PlatformActionResult]
+    # "unpublished"        — real takedown work happened just now
+    # "already_unpublished" — this track was unpublished before this call
+    # "not_published"      — it was never live on any platform to begin with
+    outcome: str
+
+
+async def _takedown_live_distributions(
+    db: Session, track, current_user: User, *, permanent: bool
+) -> List[PlatformActionResult]:
+    """Shared by unpublish (reversible) and hard delete (permanent) — walks
+    every live distribution and asks its adapter to take the real content
+    down. Best-effort per platform; a failure here is reported back, not
+    raised, so one broken platform connection doesn't block the others."""
+    results: List[PlatformActionResult] = []
+    live_dists = db.query(TrackDistribution).filter(
+        TrackDistribution.track_id == track.id,
+        TrackDistribution.status == DistributionStatus.LIVE.value,
+    ).all()
+
+    for dist in live_dists:
+        adapter = registry.get_adapter(dist.platform)
+        if not adapter:
+            continue
+        try:
+            account = await get_ready_account(db, current_user.id, adapter)
+            if not account:
+                raise RuntimeError(f"{adapter.platform_name} is no longer connected")
+
+            if permanent:
+                await adapter.delete_content(dist.platform_track_id, account)
+            else:
+                await adapter.unpublish(dist.platform_track_id, account)
+
+            dist.status = DistributionStatus.REMOVED.value
+            results.append(PlatformActionResult(platform=dist.platform, success=True))
+        except NotImplementedError:
+            # Platform doesn't support takedown via API — still remove our
+            # own tracking of it, just flag that the live content itself
+            # wasn't touched so the artist knows to check it manually.
+            dist.status = DistributionStatus.REMOVED.value
+            results.append(PlatformActionResult(
+                platform=dist.platform, success=False,
+                error=f"{adapter.platform_name} doesn't support automatic takedown — remove it there manually.",
+            ))
+        except Exception as e:
+            # Leave this distribution's status as LIVE — it may genuinely
+            # still be live, and marking it removed would misreport that.
+            logger.warning("Takedown failed for track %s on %s", track.id, dist.platform, exc_info=True)
+            results.append(PlatformActionResult(platform=dist.platform, success=False, error=str(e)[:300]))
+
+    db.commit()
+    return results
+
+
+@router.post("/{track_id}/unpublish", response_model=UnpublishResponse)
+async def unpublish_track(
     track_id: int,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user)
+    current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Delete a track (only by owner)."""
+    """
+    Reversible takedown: makes live platform content private (not deleted)
+    and hides the track from NextDrop's own public listings. Analytics,
+    earnings history, and the track record itself are untouched.
+    """
     artist_id = get_current_artist_id(db, current_user)
     track = track_crud.get_track_by_id(db, track_id=track_id)
-    
     if not track:
         raise HTTPException(status_code=404, detail="Track not found")
     if track.artist_id != artist_id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this track")
+
+    # Captured before any mutation, so we can tell "already unpublished
+    # before this call" apart from "just unpublished it right now" —
+    # otherwise every call looks identical from the response alone.
+    was_already_unpublished = not track.is_public
+
+    platform_results = await _takedown_live_distributions(db, track, current_user, permanent=False)
+
+    # Hidden from our own listings regardless of whether every platform
+    # takedown succeeded — that part is always within our control.
+    track.is_public = False
+    db.commit()
+    db.refresh(track)
+
+    if was_already_unpublished:
+        outcome = "already_unpublished"
+    elif not platform_results:
+        outcome = "not_published"
+    else:
+        outcome = "unpublished"
+
+    return UnpublishResponse(track=track, platforms=platform_results, outcome=outcome)
+
+
+@router.delete("/{track_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_track(
+    track_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+    storage: StorageClient = Depends(get_storage_client),
+):
+    """
+    Permanently delete a track: takes down live platform content for good,
+    deletes its audio/cover files from storage, and removes the record
+    (analytics/distributions/split-sheets cascade with it; JamJar posts and
+    collaboration chats that referenced it keep existing, just lose the
+    link — see the track_id ondelete behavior on those tables).
+
+    Blocked once the track has contributed real earnings — hard-deleting it
+    would silently shrink the artist's wallet balance on its next sync,
+    since that's recomputed live from current track_analytics. Unpublish
+    instead in that case; it's reversible and doesn't touch history.
+    """
+    artist = artist_crud.get_artist_by_user_id(db, user_id=current_user.id)
+    if not artist:
+        raise HTTPException(status_code=400, detail="You need to create an artist profile first")
+    track = track_crud.get_track_by_id(db, track_id=track_id)
+
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    if track.artist_id != artist.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this track")
-    
+
+    earnings = compute_artist_earnings(db, artist_id=artist.id, owner_user_id=current_user.id)
+    track_earnings = next((t for t in earnings.tracks if t.track_id == track.id), None)
+    if track_earnings and track_earnings.net_revenue > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"This track has earned ${track_earnings.net_revenue:.2f} — deleting it would "
+                "remove that from your balance. Unpublish it instead to take it down without "
+                "losing that history."
+            ),
+        )
+
+    await _takedown_live_distributions(db, track, current_user, permanent=True)
+
+    for url in (track.file_url, track.cover_art_url):
+        file_key = storage.file_key_from_url(url)
+        if file_key:
+            try:
+                storage.delete_file(file_key)
+            except Exception:
+                logger.warning("Failed to delete storage file %s for track %s", file_key, track.id, exc_info=True)
+
     track_crud.delete_track(db, track=track)
     return None

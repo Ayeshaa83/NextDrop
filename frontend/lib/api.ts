@@ -113,7 +113,8 @@ export interface AIAnalysisResponse {
   features: Record<string, number | boolean>;
   hit_score: number;
   predicted_genre: string;
-  hit_factors: Record<string, string>;
+  genre_confidence?: number;
+  hit_factors: Record<string, string | number>;
 }
 
 export interface Album {
@@ -134,6 +135,12 @@ export interface TrackAnalytics {
   viral_velocity: number | null;
   sentiment_data: Record<string, number> | null;
   last_updated: string;
+  // Per-platform — kept separate since YouTube and Spotify measure
+  // genuinely different things (see track detail page).
+  youtube_views: number;
+  youtube_likes: number;
+  youtube_comments: number;
+  spotify_popularity: number | null;
 }
 
 export interface DashboardData {
@@ -367,7 +374,19 @@ export const tracksApi = {
       method: 'DELETE',
     });
   },
+
+  async unpublishTrack(trackId: number): Promise<UnpublishResult> {
+    return apiFetch<UnpublishResult>(`/api/v1/tracks/${trackId}/unpublish`, {
+      method: 'POST',
+    });
+  },
 };
+
+export interface UnpublishResult {
+  track: Track;
+  platforms: { platform: string; success: boolean; error: string | null }[];
+  outcome: 'unpublished' | 'already_unpublished' | 'not_published';
+}
 
 // ============ ALBUMS API ============
 

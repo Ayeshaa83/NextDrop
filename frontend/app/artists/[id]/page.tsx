@@ -30,7 +30,7 @@ export default function ArtistProfilePage() {
     const { isLoading: authLoading } = useRequireAuth();
     const { data: artist, loading: artistLoading, error: artistError } = useArtist(artistId);
     const { data: tracksPage, loading: tracksLoading } = useArtistTracks(artistId);
-    const { playTracks, currentTrack, isPlaying } = usePlayer();
+    const { playTracks, currentTrack, isPlaying, toggle } = usePlayer();
 
     const loading = authLoading || artistLoading;
 
@@ -64,6 +64,11 @@ export default function ArtistProfilePage() {
     const tracks = tracksPage?.items || [];
 
     const handlePlay = (trackId: number) => {
+        // Already loaded — toggle pause/resume instead of restarting from 0.
+        if (currentTrack?.id === trackId) {
+            toggle();
+            return;
+        }
         const playerTracks = tracks
             .filter((t) => t.file_url)
             .map((t) => ({

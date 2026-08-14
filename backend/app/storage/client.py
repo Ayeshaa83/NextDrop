@@ -307,6 +307,34 @@ class StorageClient:
         except ClientError as e:
             raise RuntimeError(f"Failed to delete file: {e}")
 
+    def file_key_from_url(self, url: str | None) -> str | None:
+        """
+        Reverse of _get_file_url — recover the file_key if this URL points at
+        our own storage, else None. Used before deleting a file a caller only
+        has the stored URL for (e.g. an artist's old avatar being replaced).
+
+        Returns None for anything not recognizably ours — a seed/demo URL
+        (Unsplash, etc.) or any other external link — so callers never risk
+        issuing a delete against storage that isn't ours to touch.
+        """
+        if not url:
+            return None
+
+        base = url.split('?', 1)[0]  # presigned URLs carry a SigV4 query string
+
+        candidates = [self.config.public_url, *self.config.category_public_urls.values()]
+        for public_url in candidates:
+            if public_url and base.startswith(public_url.rstrip('/') + '/'):
+                return base[len(public_url.rstrip('/')) + 1:]
+
+        # Fall back for presigned URLs: {endpoint}/{bucket}/{key...}
+        if self.config.endpoint_url and base.startswith(self.config.endpoint_url.rstrip('/') + '/'):
+            rest = base[len(self.config.endpoint_url.rstrip('/')) + 1:]
+            _bucket, _, key = rest.partition('/')
+            return key or None
+
+        return None
+
     def file_exists(self, file_key: str) -> bool:
         """Check if a file exists in storage."""
         try:

@@ -3,14 +3,14 @@
 import { useState, useMemo } from 'react';
 import { usePendingTracks } from '@/lib/hooks';
 import { adminApi } from '@/lib/api';
-import { Music, Play, Loader2 } from 'lucide-react';
+import { Music, Play, Pause, Loader2 } from 'lucide-react';
 import { usePlayer } from '@/lib/playerStore';
 import { AdminSearchInput } from '../_components';
 import { cn } from '@/lib/utils';
 
 export default function PendingApprovalsPage() {
     const { data: pendingTracks, loading, refetch } = usePendingTracks();
-    const { playTracks } = usePlayer();
+    const { playTracks, currentTrack, isPlaying, toggle } = usePlayer();
 
     const [search, setSearch] = useState('');
     const [processingId, setProcessingId] = useState<number | null>(null);
@@ -112,6 +112,7 @@ export default function PendingApprovalsPage() {
                             const durationScore = track.duration ? 25 : 20;
                             const qualityScore = Math.min(100, (track as any).quality_score || (titleScore + genreScore + bpmScore + durationScore));
                             const isVerified = qualityScore >= 80;
+                            const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
 
                             return (
                                 <div
@@ -151,17 +152,24 @@ export default function PendingApprovalsPage() {
                                     <div className="flex items-center gap-3 self-end md:self-center">
                                         {/* Play Preview */}
                                         <button
-                                            onClick={() => track.file_url && playTracks([{
-                                                id: track.id,
-                                                title: track.title,
-                                                artist: track.artist_name || 'Unknown Artist',
-                                                url: track.file_url,
-                                            }], 0)}
+                                            onClick={() => {
+                                                if (!track.file_url) return;
+                                                if (currentTrack?.id === track.id) {
+                                                    toggle();
+                                                    return;
+                                                }
+                                                playTracks([{
+                                                    id: track.id,
+                                                    title: track.title,
+                                                    artist: track.artist_name || 'Unknown Artist',
+                                                    url: track.file_url,
+                                                }], 0);
+                                            }}
                                             disabled={!track.file_url}
                                             className="size-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all disabled:opacity-40"
                                             title="Preview Track"
                                         >
-                                            <Play className="size-4 text-white" />
+                                            {isCurrentlyPlaying ? <Pause className="size-4 text-white" /> : <Play className="size-4 text-white" />}
                                         </button>
 
                                         {/* Mark Under Review */}

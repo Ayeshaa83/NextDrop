@@ -6,29 +6,85 @@ import { useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
 import { useMyTracks, formatNumber, formatDuration } from '@/lib/hooks';
 import { usePlayer } from '@/lib/playerStore';
+import { tracksApi, ApiError, Track } from '@/lib/api';
 import {
     Plus,
     Play,
     Pause,
-    MoreVertical,
+    ChevronRight,
     Music as MusicIcon,
     Disc,
     Upload,
     Filter,
     Mic2,
-    ListMusic
+    ListMusic,
+    MoreVertical,
+    EyeOff,
+    Trash2,
+    Loader2,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { DistributionModal } from '@/components/DistributionModal';
 
 export default function MusicLibrary() {
     const { user, artist, isLoading: authLoading } = useRequireAuth();
-    const { data: tracks, loading: tracksLoading } = useMyTracks();
-    const { playTracks, currentTrack, isPlaying } = usePlayer();
+    const { data: tracks, loading: tracksLoading, refetch: refetchTracks } = useMyTracks();
+    const { playTracks, currentTrack, isPlaying, toggle } = usePlayer();
     const router = useRouter();
-    
+
     const [distributionTrack, setDistributionTrack] = useState<{id: number, title: string} | null>(null);
+    const [menuOpenFor, setMenuOpenFor] = useState<number | null>(null);
+    const [confirmAction, setConfirmAction] = useState<{ track: Track; type: 'unpublish' | 'delete' } | null>(null);
+    const [actionLoading, setActionLoading] = useState(false);
+    const [actionError, setActionError] = useState<string | null>(null);
+    const [platformResults, setPlatformResults] = useState<{ platform: string; success: boolean; error: string | null }[] | null>(null);
+    // Set either the instant we know client-side (is_public already false —
+    // no need to even call the API to say "already unpublished") or once the
+    // API tells us what actually happened. Drives which message/buttons the
+    // modal shows — null means "still asking, nothing has happened yet".
+    const [outcome, setOutcome] = useState<'unpublished' | 'already_unpublished' | 'not_published' | null>(null);
+
+    const openUnpublishConfirm = (track: Track) => {
+        setConfirmAction({ track, type: 'unpublish' });
+        // Already known without asking the server — skip straight to the
+        // informational state instead of offering a pointless confirm step.
+        setOutcome(track.is_public ? null : 'already_unpublished');
+    };
+
+    const handleConfirmAction = async () => {
+        if (!confirmAction) return;
+        setActionLoading(true);
+        setActionError(null);
+        setPlatformResults(null);
+        try {
+            if (confirmAction.type === 'delete') {
+                await tracksApi.deleteTrack(confirmAction.track.id);
+                setConfirmAction(null);
+            } else {
+                const result = await tracksApi.unpublishTrack(confirmAction.track.id);
+                setPlatformResults(result.platforms);
+                setOutcome(result.outcome);
+                // Only auto-close if it was real, fully-successful takedown work —
+                // otherwise leave the dialog up showing what needs attention.
+                if (result.outcome === 'unpublished' && result.platforms.every(p => p.success)) {
+                    setConfirmAction(null);
+                }
+            }
+            refetchTracks();
+        } catch (err) {
+            setActionError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const closeConfirm = () => {
+        setConfirmAction(null);
+        setActionError(null);
+        setPlatformResults(null);
+        setOutcome(null);
+    };
 
     const loading = authLoading || tracksLoading;
 
@@ -58,6 +114,15 @@ export default function MusicLibrary() {
 
     const handlePlay = (track: any, index: number) => {
         if (!track.file_url) return;
+
+        // Already the track loaded in the player — toggle pause/resume in
+        // place instead of restarting it from 0 (playTracks always treats
+        // its call as "start playing this," even for the current track).
+        if (currentTrack?.id === track.id) {
+            toggle();
+            return;
+        }
+
         const playerTracks = trackItems
             .filter((t: any) => t.file_url)
             .map((t: any, i: number) => ({
@@ -229,7 +294,7 @@ export default function MusicLibrary() {
                                     {formatDuration(track.duration || 0)}
                                 </span>
 
-                                <button 
+                                <button
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setDistributionTrack({ id: track.id, title: track.title });
@@ -238,6 +303,74 @@ export default function MusicLibrary() {
                                 >
                                     Distribute
                                 </button>
+
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        router.push(`/tracks/${track.id}`);
+                                    }}
+                                    title="View track details"
+                                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-all"
+                                >
+                                    <ChevronRight className="size-4" />
+                                </button>
+
+                                <div className="relative">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setMenuOpenFor(menuOpenFor === track.id ? null : track.id);
+                                        }}
+                                        title="More actions"
+                                        className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-all"
+                                    >
+                                        <MoreVertical className="size-4" />
+                                    </button>
+
+                                    <AnimatePresence>
+                                        {menuOpenFor === track.id && (
+                                            <>
+                                                {/* Click-away overlay */}
+                                                <div
+                                                    className="fixed inset-0 z-40"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setMenuOpenFor(null);
+                                                    }}
+                                                />
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -6 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -6 }}
+                                                    className="absolute right-0 top-full mt-2 w-48 rounded-xl bg-[#0d0d0d] border border-white/10 shadow-2xl z-50 overflow-hidden"
+                                                >
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setMenuOpenFor(null);
+                                                            openUnpublishConfirm(track);
+                                                        }}
+                                                        className="w-full px-4 py-3 flex items-center gap-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white transition-colors text-left"
+                                                    >
+                                                        <EyeOff className="size-3.5" />
+                                                        Unpublish
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setMenuOpenFor(null);
+                                                            setConfirmAction({ track, type: 'delete' });
+                                                        }}
+                                                        className="w-full px-4 py-3 flex items-center gap-2.5 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors text-left border-t border-white/5"
+                                                    >
+                                                        <Trash2 className="size-3.5" />
+                                                        Delete Permanently
+                                                    </button>
+                                                </motion.div>
+                                            </>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
                             </div>
                         </motion.div>
                     );
@@ -252,6 +385,128 @@ export default function MusicLibrary() {
                     trackTitle={distributionTrack.title}
                 />
             )}
+
+            <AnimatePresence>
+                {confirmAction && (
+                    <ConfirmActionModal
+                        track={confirmAction.track}
+                        actionType={confirmAction.type}
+                        loading={actionLoading}
+                        error={actionError}
+                        platformResults={platformResults}
+                        outcome={outcome}
+                        onConfirm={handleConfirmAction}
+                        onCancel={closeConfirm}
+                    />
+                )}
+            </AnimatePresence>
         </motion.div>
+    );
+}
+
+const OUTCOME_COPY: Record<'unpublished' | 'already_unpublished' | 'not_published', { title: string; message: string }> = {
+    unpublished: { title: 'Unpublished', message: 'This track has been unpublished.' },
+    already_unpublished: { title: 'Already Unpublished', message: "This track is already unpublished — there's nothing to do." },
+    not_published: { title: 'Not Published', message: "This track isn't live on any platform yet, so there's nothing to unpublish." },
+};
+
+function ConfirmActionModal({
+    track, actionType, loading, error, platformResults, outcome, onConfirm, onCancel,
+}: {
+    track: Track;
+    actionType: 'unpublish' | 'delete';
+    loading: boolean;
+    error: string | null;
+    platformResults: { platform: string; success: boolean; error: string | null }[] | null;
+    outcome: 'unpublished' | 'already_unpublished' | 'not_published' | null;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    const isDelete = actionType === 'delete';
+    const failedPlatforms = platformResults?.filter(p => !p.success) ?? [];
+    // Once we know the outcome (client-side pre-check, or the API told us),
+    // this is purely informational — no destructive action left to confirm.
+    const isInfoOnly = outcome !== null;
+
+    return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onCancel}
+                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl p-6 space-y-4"
+            >
+                <div className="flex items-center gap-3">
+                    <div className={cn(
+                        "size-10 rounded-full flex items-center justify-center shrink-0",
+                        isInfoOnly
+                            ? outcome === 'unpublished' ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-500/10 text-slate-400"
+                            : isDelete ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400"
+                    )}>
+                        {isDelete && !isInfoOnly ? <Trash2 className="size-5" /> : <EyeOff className="size-5" />}
+                    </div>
+                    <div className="min-w-0">
+                        <h3 className="text-white font-black text-lg">
+                            {isInfoOnly ? OUTCOME_COPY[outcome].title : isDelete ? 'Delete Track' : 'Unpublish Track'}
+                        </h3>
+                        <p className="text-xs text-slate-500 truncate">{track.title}</p>
+                    </div>
+                </div>
+
+                <p className="text-sm text-slate-400 leading-relaxed">
+                    {isInfoOnly
+                        ? OUTCOME_COPY[outcome].message
+                        : isDelete
+                            ? "Permanently deletes this track — its audio, cover art, and any live platform listing — and cannot be undone. Blocked automatically if it's already earned money, to protect your balance."
+                            : "Takes the track down (privately, reversibly) from any platform it's live on and hides it from your public profile. Analytics and earnings history are kept."}
+                </p>
+
+                {error && (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-200">
+                        {error}
+                    </div>
+                )}
+
+                {failedPlatforms.length > 0 && (
+                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-1">
+                        {failedPlatforms.map(p => (
+                            <p key={p.platform} className="text-xs text-amber-200">
+                                <span className="capitalize font-bold">{p.platform}:</span> {p.error}
+                            </p>
+                        ))}
+                    </div>
+                )}
+
+                <div className="flex items-center gap-3 pt-2">
+                    <button
+                        onClick={onCancel}
+                        disabled={loading}
+                        className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors disabled:opacity-50"
+                    >
+                        {isInfoOnly || failedPlatforms.length > 0 ? 'Close' : 'Cancel'}
+                    </button>
+                    {!isInfoOnly && (
+                        <button
+                            onClick={onConfirm}
+                            disabled={loading}
+                            className={cn(
+                                "flex-1 px-4 py-2.5 rounded-xl text-white text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50",
+                                isDelete ? "bg-red-500 hover:bg-red-600" : "bg-amber-500 hover:bg-amber-600"
+                            )}
+                        >
+                            {loading && <Loader2 className="size-3.5 animate-spin" />}
+                            {loading ? 'Working...' : failedPlatforms.length > 0 ? 'Retry' : isDelete ? 'Delete Permanently' : 'Unpublish'}
+                        </button>
+                    )}
+                </div>
+            </motion.div>
+        </div>
     );
 }

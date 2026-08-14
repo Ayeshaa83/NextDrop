@@ -79,15 +79,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   play: (track) => {
     const state = get();
     const audio = state.audioRef;
-    
+
     if (track) {
+      if (state.currentTrack?.id === track.id) {
+        // Same track already loaded — resume in place rather than
+        // reassigning audio.src, which resets playback to 0 even when the
+        // URL is unchanged (that's how HTMLMediaElement.src works: any
+        // assignment re-triggers the resource selection algorithm).
+        if (audio) audio.play().catch(console.error);
+        set({ isPlaying: true });
+        return;
+      }
       // Play new track
-      set({ 
-        currentTrack: track, 
+      set({
+        currentTrack: track,
         isPlaying: true,
         currentTime: 0,
       });
-      
+
       if (audio) {
         audio.src = track.url;
         audio.play().catch(console.error);

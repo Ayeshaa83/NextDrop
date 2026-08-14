@@ -292,11 +292,14 @@ class YouTubePlatformAdapter(PlatformInterface):
           4. Return DistributionResult with the video ID
 
         Options:
-          title       : Video title (defaults to track.title)
-          description : Video description
-          privacy     : 'private' | 'unlisted' | 'public' (default: 'unlisted')
-          tags        : list of tag strings
-          category_id : YouTube category ID (default: '10' = Music)
+          title           : Video title (defaults to track.title)
+          description     : Video description
+          privacy         : 'private' | 'unlisted' | 'public' (default: 'unlisted')
+          tags            : list of tag strings
+          category_id     : YouTube category ID (default: '10' = Music)
+          cover_image_url : Image to use as the video's static frame — overrides
+                             track.cover_art_url for this publish only. Falls back
+                             to a black frame if neither is set or resolvable.
         """
         opts = options or {}
         privacy = opts.get("privacy", "unlisted")
@@ -304,6 +307,11 @@ class YouTubePlatformAdapter(PlatformInterface):
         description = opts.get("description", f"Distributed via NextDrop | {track.genre or ''}")
         tags = opts.get("tags", [track.genre] if track.genre else [])
         category_id = opts.get("category_id", "10")  # 10 = Music
+        # COPPA self-declaration — YouTube requires this on every upload.
+        # Defaults to False (not made for kids), the correct default for music
+        # releases, but it's the artist's legal declaration to make, not ours.
+        made_for_kids = bool(opts.get("made_for_kids", False))
+        cover_image_url = opts.get("cover_image_url") or track.cover_art_url
 
         # ── Step 1: Prepare the audio file ───────────────────────────────────
         audio_path = await self._resolve_audio_path(track)
@@ -311,7 +319,7 @@ class YouTubePlatformAdapter(PlatformInterface):
             return DistributionResult.failure("Audio file not accessible for distribution")
 
         # ── Step 2: Convert audio → video using ffmpeg ───────────────────────
-        video_path = await self._audio_to_video(audio_path, track)
+        video_path = await self._audio_to_video(audio_path, cover_image_url)
         if not video_path:
             return DistributionResult.failure(
                 "ffmpeg is not installed or audio-to-video conversion failed. "
@@ -329,7 +337,7 @@ class YouTubePlatformAdapter(PlatformInterface):
                 },
                 "status": {
                     "privacyStatus": privacy,
-                    "selfDeclaredMadeForKids": False,
+                    "selfDeclaredMadeForKids": made_for_kids,
                 },
             }
 
@@ -414,7 +422,50 @@ class YouTubePlatformAdapter(PlatformInterface):
 
         return None
 
-    async def _audio_to_video(self, audio_path: str, track: Track) -> Optional[str]:
+    async def _resolve_image_path(self, image_url: Optional[str]) -> tuple[Optional[str], bool]:
+        """
+        Resolve a locally-accessible path for a cover image, same rules as
+        _resolve_audio_path: local paths pass through, our own local-storage
+        mock URLs get mapped to disk, and remote http(s) URLs (S3/Supabase —
+        what this app's real storage actually returns) get downloaded to a
+        temp file. Returns (path, is_temp_file) — is_temp_file tells the
+        caller whether it's safe to delete afterward (never true for paths
+        that point at real on-disk files, only for our own downloaded copy).
+        Returns (None, False) if there's nothing to resolve or it fails, so
+        the caller can fall back to a black frame.
+        """
+        if not image_url:
+            return None, False
+
+        if image_url.startswith("/") or (len(image_url) > 1 and image_url[1] == ":"):
+            return (image_url, False) if os.path.exists(image_url) else (None, False)
+
+        if "localhost" in image_url or "127.0.0.1" in image_url:
+            parts = image_url.split("/api/v1/storage/local/", 1)
+            if len(parts) == 2:
+                from app.api.v1.endpoints.storage import LOCAL_UPLOADS_DIR
+                local_path = os.path.join(LOCAL_UPLOADS_DIR, parts[1])
+                return (local_path, False) if os.path.exists(local_path) else (None, False)
+            return None, False
+
+        if image_url.startswith("http"):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.get(image_url)
+                    resp.raise_for_status()
+                ext = os.path.splitext(image_url)[1] or ".jpg"
+                if len(ext) > 5:  # discard any bogus/oversized "extension" (query strings etc.)
+                    ext = ".jpg"
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+                tmp.write(resp.content)
+                tmp.close()
+                return tmp.name, True
+            except Exception:
+                return None, False
+
+        return None, False
+
+    async def _audio_to_video(self, audio_path: str, cover_image_url: Optional[str]) -> Optional[str]:
         """
         Use ffmpeg to combine audio with a static image (cover art or black frame)
         to produce an MP4 video suitable for YouTube upload.
@@ -434,15 +485,15 @@ class YouTubePlatformAdapter(PlatformInterface):
             return None  # ffmpeg not installed
 
         output_path = tempfile.mktemp(suffix=".mp4")
+        image_path, image_is_temp = await self._resolve_image_path(cover_image_url)
 
-        # Build ffmpeg command
-        # If cover art is available, use it; otherwise use a black frame
-        if track.cover_art_url and track.cover_art_url.startswith("/"):
-            # Local cover art
+        # Build ffmpeg command — use the resolved cover image if we have one,
+        # otherwise fall back to a black frame rather than failing the upload.
+        if image_path:
             cmd = [
                 "ffmpeg", "-y",
-                "-loop", "1", "-i", track.cover_art_url,   # Static image
-                "-i", audio_path,                           # Audio track
+                "-loop", "1", "-i", image_path,             # Static image
+                "-i", audio_path,                            # Audio track
                 "-c:v", "libx264",
                 "-tune", "stillimage",
                 "-c:a", "aac",
@@ -481,6 +532,13 @@ class YouTubePlatformAdapter(PlatformInterface):
             return None
         except Exception:
             return None
+        finally:
+            # Clean up only our own downloaded temp copy — never a real on-disk file
+            if image_is_temp and image_path and os.path.exists(image_path):
+                try:
+                    os.unlink(image_path)
+                except OSError:
+                    pass
 
     async def _upload_video(
         self,
@@ -571,6 +629,46 @@ class YouTubePlatformAdapter(PlatformInterface):
             comments=int(stats["commentCount"]) if stats.get("commentCount") else None,
             raw=stats,
         )
+
+    # ── Removal ───────────────────────────────────────────────────────────────
+
+    async def unpublish(self, platform_track_id: str, account: "SocialAccount") -> bool:
+        """
+        Set the video to private — reversible from YouTube Studio directly,
+        unlike delete_content. Video ID, stats, and comments are untouched;
+        it's simply no longer publicly visible or searchable.
+        """
+        async with httpx.AsyncClient() as client:
+            # videos.update is a PUT per the YouTube Data API v3 reference.
+            resp = await client.put(
+                f"{self.API_BASE}/videos",
+                params={"part": "status"},
+                headers={
+                    "Authorization": f"Bearer {account.access_token}",
+                    "Content-Type": "application/json; charset=UTF-8",
+                },
+                content=json.dumps({
+                    "id": platform_track_id,
+                    "status": {"privacyStatus": "private"},
+                }).encode(),
+            )
+            resp.raise_for_status()
+        return True
+
+    async def delete_content(self, platform_track_id: str, account: "SocialAccount") -> bool:
+        """Permanently delete the video from YouTube. Irreversible — the
+        video ID stops resolving entirely, stats and comments are gone."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{self.API_BASE}/videos",
+                params={"id": platform_track_id},
+                headers={"Authorization": f"Bearer {account.access_token}"},
+            )
+            # YouTube returns 204 on success; treat "already gone" (404) as
+            # success too — the end state the caller wants is already true.
+            if resp.status_code not in (204, 404):
+                resp.raise_for_status()
+        return True
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
