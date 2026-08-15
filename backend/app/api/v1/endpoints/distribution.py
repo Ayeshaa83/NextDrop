@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.api import deps
 from app.crud import artist as artist_crud
@@ -216,12 +216,12 @@ async def distribute_track(
     try:
         # Token refresh logic is typically handled by the endpoint wrapping it,
         # but to ensure robustness, we refresh if expired right before uploading.
-        if account.expires_at and account.expires_at < datetime.utcnow():
+        if account.expires_at and account.expires_at < datetime.now(timezone.utc):
             new_tokens = await adapter.refresh_token(account)
             for k, v in new_tokens.items():
                 if hasattr(account, k) and v is not None:
                     setattr(account, k, v)
-            account.updated_at = datetime.utcnow()
+            account.updated_at = datetime.now(timezone.utc)
             db.commit()
             
         # Decrypt tokens before using them in the adapter
@@ -238,7 +238,7 @@ async def distribute_track(
         dist.error_message = result.error_message
         dist.platform_metadata = result.platform_metadata
         if dist.status == DistributionStatus.LIVE:
-            dist.distributed_at = datetime.utcnow()
+            dist.distributed_at = datetime.now(timezone.utc)
             
         db.commit()
         db.refresh(dist)

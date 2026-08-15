@@ -12,7 +12,7 @@ COMING_SOON below is only a display list of platforms we plan to support;
 entries are removed automatically once a real adapter with the same id
 is registered.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -193,7 +193,7 @@ def list_integrations(
 
         if is_connected:
             connected_count += 1
-            if account.expires_at and account.expires_at < datetime.utcnow():
+            if account.expires_at and account.expires_at < datetime.now(timezone.utc):
                 token_expired = True
 
         if platform["available"]:

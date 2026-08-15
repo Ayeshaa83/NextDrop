@@ -2,7 +2,7 @@
 YouTube OAuth Endpoints
 Handles Connect YouTube flow for artists.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -113,7 +113,7 @@ async def youtube_callback(
             for k, v in account_data.items():
                 if hasattr(existing_account, k) and v is not None:
                     setattr(existing_account, k, v)
-            existing_account.updated_at = datetime.utcnow()
+            existing_account.updated_at = datetime.now(timezone.utc)
         else:
             # Encrypt tokens before saving
             if "access_token" in account_data:
@@ -162,7 +162,7 @@ def youtube_status(
     if not account:
         return YouTubeConnectionStatus(connected=False, provider="youtube")
     
-    is_expired = account.expires_at and account.expires_at < datetime.utcnow()
+    is_expired = account.expires_at and account.expires_at < datetime.now(timezone.utc)
     
     return YouTubeConnectionStatus(
         connected=True,
@@ -210,7 +210,7 @@ async def youtube_stats(
                 view_count=cached_stats.view_count,
             )
     
-    if account.expires_at and account.expires_at < datetime.utcnow():
+    if account.expires_at and account.expires_at < datetime.now(timezone.utc):
         if not account.refresh_token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -226,7 +226,7 @@ async def youtube_stats(
             for k, v in new_tokens.items():
                 if hasattr(account, k) and v is not None:
                     setattr(account, k, v)
-            account.updated_at = datetime.utcnow()
+            account.updated_at = datetime.now(timezone.utc)
             db.commit()
         except Exception:
             raise HTTPException(
@@ -252,7 +252,7 @@ async def youtube_stats(
             cached_stats.channel_id = channel.get("channel_id")
             cached_stats.channel_title = channel.get("channel_title")
             cached_stats.thumbnail_url = channel.get("thumbnail_url")
-            cached_stats.fetched_at = datetime.utcnow()
+            cached_stats.fetched_at = datetime.now(timezone.utc)
         else:
             cached_stats = SocialStats(
                 user_id=current_user.id,
@@ -263,7 +263,7 @@ async def youtube_stats(
                 channel_id=channel.get("channel_id"),
                 channel_title=channel.get("channel_title"),
                 thumbnail_url=channel.get("thumbnail_url"),
-                fetched_at=datetime.utcnow()
+                fetched_at=datetime.now(timezone.utc)
             )
             db.add(cached_stats)
         
@@ -309,7 +309,7 @@ async def youtube_refresh_token(
         for k, v in new_tokens.items():
             if hasattr(account, k) and v is not None:
                 setattr(account, k, v)
-        account.updated_at = datetime.utcnow()
+        account.updated_at = datetime.now(timezone.utc)
         db.commit()
         return {"message": "Token refreshed successfully", "expires_at": account.expires_at}
     except httpx.HTTPStatusError:
@@ -360,7 +360,7 @@ async def get_recent_videos(
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not connected")
     
-    if account.expires_at and account.expires_at < datetime.utcnow():
+    if account.expires_at and account.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
     
     try:

@@ -5,10 +5,8 @@ from app.crud import analytics as analytics_crud
 from app.crud import artist as artist_crud
 from app.crud import track as track_crud
 from app.schemas.analytics import TrackAnalyticsResponse, RevenuePredictionResponse, DashboardResponse
-from app.models import User, TrackDistribution, DistributionStatus, SocialAccount
-from app.platforms.registry import registry
-from app.sec.encryption import decrypt_token
-from datetime import datetime
+from app.models import User
+from app.services.analytics_refresh import refresh_track_analytics
 
 router = APIRouter()
 
@@ -148,6 +146,11 @@ async def refresh_platform_analytics(
 ):
     """
     Fetch real analytics from all platforms a track is distributed to.
+
+    This is the on-demand path (page visit / manual "Refresh Analytics"
+    click) — the same underlying work also runs automatically every hour
+    via the scheduled job in app/services/scheduler.py, so numbers don't
+    depend on someone having the page open to stay current.
     """
     artist = get_current_artist(db, current_user)
     track = track_crud.get_track_by_id(db, track_id=track_id)
@@ -155,82 +158,6 @@ async def refresh_platform_analytics(
         raise HTTPException(status_code=404, detail="Track not found")
     if track.artist_id != artist.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-        
-    distributions = db.query(TrackDistribution).filter(
-        TrackDistribution.track_id == track_id,
-        TrackDistribution.status == DistributionStatus.LIVE.value
-    ).all()
-    
-    analytics = analytics_crud.get_analytics_by_track_id(db, track_id=track_id)
-    if not analytics:
-        analytics = analytics_crud.create_or_update_analytics(db, track_id=track_id)
-        
-    for dist in distributions:
-        adapter = registry.get_adapter(dist.platform)
-        if not adapter or not adapter.supports_analytics:
-            continue
-            
-        account = db.query(SocialAccount).filter(
-            SocialAccount.user_id == current_user.id,
-            SocialAccount.provider == dist.platform
-        ).first()
-        
-        if not account:
-            continue
-            
-        try:
-            # Auto-refresh token if expired
-            if account.expires_at and account.expires_at < datetime.utcnow():
-                new_tokens = await adapter.refresh_token(account)
-                for k, v in new_tokens.items():
-                    if hasattr(account, k) and v is not None:
-                        setattr(account, k, v)
-                account.updated_at = datetime.utcnow()
-                db.commit()
-                
-            # Decrypt tokens before passing to the adapter
-            account.access_token = decrypt_token(account.access_token)
-            if account.refresh_token:
-                account.refresh_token = decrypt_token(account.refresh_token)
-                
-            stats = await adapter.get_track_analytics(dist.platform_track_id, account)
 
-            if dist.platform == "youtube":
-                analytics.youtube_views = stats.views or 0
-                analytics.youtube_likes = stats.likes or 0
-                analytics.youtube_comments = stats.comments or 0
-                # Record the daily delta for the streams-over-time chart
-                analytics_crud.record_snapshot(
-                    db, track_id, "youtube", analytics.youtube_views, commit=False
-                )
-
-            elif dist.platform == "spotify":
-                # streams/saves are always None via the public Web API (no
-                # distributor partnership) — popularity (0-100) is the one
-                # real per-track metric it actually exposes.
-                analytics.spotify_streams = stats.streams or 0
-                analytics.spotify_saves = stats.saves or 0
-                analytics.spotify_popularity = stats.raw.get("popularity")
-                analytics_crud.record_snapshot(
-                    db, track_id, "spotify", analytics.spotify_streams, commit=False
-                )
-
-            # Update total aggregates
-            analytics.stream_count = (analytics.youtube_views or 0) + (analytics.spotify_streams or 0)
-            analytics.save_count = (analytics.youtube_likes or 0) + (analytics.spotify_saves or 0)
-
-            # A successful check should always read as "just checked", even
-            # when the platform reports the same numbers as last time — the
-            # onupdate on last_updated only fires when a column actually
-            # changes, which otherwise left this looking falsely stale.
-            analytics.last_updated = datetime.utcnow()
-
-        except Exception as e:
-            # Skip this platform if stats fail, move to next
-            print(f"Failed to fetch {dist.platform} stats for track {track_id}: {e}")
-            continue
-            
-    db.commit()
-    db.refresh(analytics)
-    return analytics
+    return await refresh_track_analytics(db, track_id, current_user.id)
 

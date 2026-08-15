@@ -2,12 +2,13 @@
 
 import { useState, useEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Youtube, Music2, Radio, AlertCircle, CheckCircle2, Loader2, Link2, Globe2, Tag, Info, ImageUp } from 'lucide-react';
+import { X, Youtube, Music2, Radio, AlertCircle, CheckCircle2, Loader2, Link2, Globe2, Tag, Info, ImageUp, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
     distributionApi,
     integrationsApi,
     storageApi,
+    tracksApi,
     TrackDistributionStatus,
     DistributionPlatform,
     ApiError,
@@ -18,6 +19,11 @@ interface DistributionModalProps {
     onClose: () => void;
     trackId: number;
     trackTitle: string;
+    // Whether the track itself is currently public. When it's been
+    // unpublished but a platform's distribution row is still "live", that
+    // means the real takedown on that platform failed — worth telling apart
+    // from a normal, healthy "live" state rather than showing both the same.
+    trackIsPublic?: boolean;
 }
 
 // Major markets offered for territory selection. Empty selection = worldwide.
@@ -45,11 +51,12 @@ function platformIcon(platformId: string, color: string): ReactNode {
     }
 }
 
-export function DistributionModal({ isOpen, onClose, trackId, trackTitle }: DistributionModalProps) {
+export function DistributionModal({ isOpen, onClose, trackId, trackTitle, trackIsPublic }: DistributionModalProps) {
     const [platforms, setPlatforms] = useState<DistributionPlatform[]>([]);
     const [distributions, setDistributions] = useState<TrackDistributionStatus[]>([]);
     const [loading, setLoading] = useState(true);
     const [distributing, setDistributing] = useState<string | null>(null);
+    const [retrying, setRetrying] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     // Empty selection = worldwide release
     const [territories, setTerritories] = useState<string[]>([]);
@@ -166,6 +173,27 @@ export function DistributionModal({ isOpen, onClose, trackId, trackTitle }: Dist
         }
     };
 
+    // The track was unpublished on our side, but this platform's takedown
+    // itself failed (e.g. a missing OAuth scope) — its distribution row is
+    // still "live". Re-runs the same takedown rather than silently hiding
+    // the mismatch, since the content is genuinely still live out there.
+    const retryTakedown = async (platformId: string) => {
+        setRetrying(platformId);
+        setError(null);
+        try {
+            const result = await tracksApi.unpublishTrack(trackId);
+            const stillFailing = result.platforms.find(p => p.platform === platformId && !p.success);
+            if (stillFailing) {
+                setError(`${platformId}: ${stillFailing.error || 'Takedown failed again.'}`);
+            }
+            setDistributions(await distributionApi.getTrackDistributions(trackId));
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : 'Retry failed');
+        } finally {
+            setRetrying(null);
+        }
+    };
+
     const getPlatformStatus = (platformId: string) => {
         return distributions.find(d => d.platform === platformId);
     };
@@ -187,9 +215,9 @@ export function DistributionModal({ isOpen, onClose, trackId, trackTitle }: Dist
                     initial={{ opacity: 0, scale: 0.95, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="relative w-full max-w-lg bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                    className="relative w-full max-w-lg max-h-[90vh] bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                 >
-                    <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                    <div className="p-6 border-b border-white/5 flex items-center justify-between shrink-0">
                         <div>
                             <h2 className="text-xl font-black text-white">Distribute Release</h2>
                             <p className="text-xs font-black text-slate-500 uppercase tracking-widest mt-1">
@@ -201,7 +229,11 @@ export function DistributionModal({ isOpen, onClose, trackId, trackTitle }: Dist
                         </button>
                     </div>
 
-                    <div className="p-6 space-y-6">
+                    {/* Body scrolls independently of the fixed header — the YouTube
+                        form (title/description/tags/cover/visibility + its own
+                        Cancel/Publish row) can be taller than the viewport, and
+                        without this the bottom row was simply unreachable. */}
+                    <div className="p-6 space-y-6 overflow-y-auto">
                         {error && (
                             <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-3">
                                 <AlertCircle className="size-5 text-red-500 shrink-0" />
@@ -261,6 +293,9 @@ export function DistributionModal({ isOpen, onClose, trackId, trackTitle }: Dist
                                     // YouTube is the only adapter that actually publishes content — it's
                                     // the only one that needs a details step before firing the upload.
                                     const needsDetailsStep = platform.id === 'youtube' && !alreadyHandled;
+                                    // Unpublished on our side, but this platform's distribution row is
+                                    // still "live" — the real takedown there failed.
+                                    const takedownFailed = trackIsPublic === false && status?.status === 'live';
 
                                     return (
                                         <div key={platform.id}>
@@ -268,13 +303,16 @@ export function DistributionModal({ isOpen, onClose, trackId, trackTitle }: Dist
                                                 platform={platform}
                                                 icon={platformIcon(platform.id, platform.color)}
                                                 status={status}
+                                                takedownFailed={takedownFailed}
                                                 onDistribute={() =>
                                                     needsDetailsStep
                                                         ? setYoutubeFormOpen(true)
                                                         : distributeToPlatform(platform.id)
                                                 }
                                                 onConnect={() => connectPlatform(platform)}
+                                                onRetryTakedown={() => retryTakedown(platform.id)}
                                                 isDistributing={distributing === platform.id}
+                                                isRetrying={retrying === platform.id}
                                             />
                                             {needsDetailsStep && youtubeFormOpen && (
                                                 <YoutubePublishForm
@@ -312,12 +350,17 @@ interface PlatformCardProps {
     platform: DistributionPlatform;
     icon: ReactNode;
     status?: TrackDistributionStatus;
+    // Track was unpublished on our side, but this platform's takedown
+    // itself failed — it's genuinely still live out there.
+    takedownFailed: boolean;
     onDistribute: () => void;
     onConnect: () => void;
+    onRetryTakedown: () => void;
     isDistributing: boolean;
+    isRetrying: boolean;
 }
 
-function PlatformCard({ platform, icon, status, onDistribute, onConnect, isDistributing }: PlatformCardProps) {
+function PlatformCard({ platform, icon, status, takedownFailed, onDistribute, onConnect, onRetryTakedown, isDistributing, isRetrying }: PlatformCardProps) {
     const isLive = status?.status === 'live';
     const isPending = status?.status === 'pending' || status?.status === 'processing';
     const isFailed = status?.status === 'failed';
@@ -338,6 +381,13 @@ function PlatformCard({ platform, icon, status, onDistribute, onConnect, isDistr
                         <p className="text-[10px] font-black text-amber-400/80 uppercase tracking-widest mt-1">
                             Not Connected
                         </p>
+                    ) : takedownFailed ? (
+                        <div className="flex items-center gap-1.5 mt-1">
+                            <AlertCircle className="size-3 text-amber-400" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+                                Unpublish Failed — Still Live
+                            </span>
+                        </div>
                     ) : status ? (
                         <div className="flex items-center gap-1.5 mt-1">
                             {isLive && <CheckCircle2 className="size-3 text-emerald-400" />}
@@ -370,6 +420,15 @@ function PlatformCard({ platform, icon, status, onDistribute, onConnect, isDistr
                     >
                         <Link2 className="size-3" />
                         Connect
+                    </button>
+                ) : takedownFailed ? (
+                    <button
+                        onClick={onRetryTakedown}
+                        disabled={isRetrying}
+                        className="px-4 py-2 rounded-lg bg-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/30 transition-colors flex items-center gap-2 disabled:opacity-50"
+                    >
+                        {isRetrying ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                        {isRetrying ? 'Retrying...' : 'Retry Takedown'}
                     </button>
                 ) : isLive ? (
                     status?.platform_url ? (

@@ -391,6 +391,19 @@ async def unpublish_track(
     # otherwise every call looks identical from the response alone.
     was_already_unpublished = not track.is_public
 
+    # Outcome must be driven by whether there was actually live platform
+    # content to take down — NOT by is_public alone. A track can already be
+    # is_public=False from a *previous* unpublish attempt whose platform
+    # takedown failed (e.g. a missing OAuth scope): the distribution stays
+    # LIVE, so there's real work to retry here even though is_public never
+    # changes. Keying outcome off was_already_unpublished alone meant that
+    # retry silently reported "already unpublished — nothing to do" even
+    # when it just succeeded (or failed again) at a real takedown.
+    had_live_distributions = db.query(TrackDistribution).filter(
+        TrackDistribution.track_id == track.id,
+        TrackDistribution.status == DistributionStatus.LIVE.value,
+    ).count() > 0
+
     platform_results = await _takedown_live_distributions(db, track, current_user, permanent=False)
 
     # Hidden from our own listings regardless of whether every platform
@@ -399,12 +412,15 @@ async def unpublish_track(
     db.commit()
     db.refresh(track)
 
-    if was_already_unpublished:
-        outcome = "already_unpublished"
-    elif not platform_results:
-        outcome = "not_published"
-    else:
+    if had_live_distributions:
+        # Real takedown work was attempted just now. Whether every platform
+        # actually succeeded is reported per-platform in `platforms` —
+        # callers should check that, not infer full success from this alone.
         outcome = "unpublished"
+    elif was_already_unpublished:
+        outcome = "already_unpublished"
+    else:
+        outcome = "not_published"
 
     return UnpublishResponse(track=track, platforms=platform_results, outcome=outcome)
 

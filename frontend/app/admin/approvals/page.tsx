@@ -112,6 +112,7 @@ export default function PendingApprovalsPage() {
                             const durationScore = track.duration ? 25 : 20;
                             const qualityScore = Math.min(100, (track as any).quality_score || (titleScore + genreScore + bpmScore + durationScore));
                             const isVerified = qualityScore >= 80;
+                            const isUnderReview = track.approval_status === 'under_review';
                             const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
 
                             return (
@@ -139,6 +140,13 @@ export default function PendingApprovalsPage() {
                                                 {isVerified && (
                                                     <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.2)]">
                                                         Fast-Track Verified
+                                                    </span>
+                                                )}
+
+                                                {/* Marked "under review" — still stays in this queue, just flagged as being actively looked at */}
+                                                {isUnderReview && (
+                                                    <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-blue-400 bg-blue-500/10 border border-blue-500/30 px-2.5 py-0.5 rounded-full">
+                                                        Under Review
                                                     </span>
                                                 )}
                                             </div>
@@ -175,10 +183,10 @@ export default function PendingApprovalsPage() {
                                         {/* Mark Under Review */}
                                         <button
                                             onClick={() => handleMarkReview(track.id)}
-                                            disabled={processingId === track.id}
+                                            disabled={processingId === track.id || isUnderReview}
                                             className="px-4 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-xl font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50"
                                         >
-                                            Review
+                                            {isUnderReview ? 'Reviewing' : 'Review'}
                                         </button>
 
                                         {/* Reject */}

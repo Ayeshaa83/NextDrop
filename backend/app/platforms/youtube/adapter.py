@@ -30,10 +30,20 @@ class YouTubePlatformAdapter(PlatformInterface):
     Scopes requested:
       - youtube.readonly   : read channel stats, video analytics
       - youtube.upload     : upload videos (for distribution)
+      - youtube.force-ssl  : edit/delete existing videos (unpublish, hard delete)
 
-    NOTE: Adding `youtube.upload` scope means existing connected users will
-    need to re-consent (one-time re-connect). This is unavoidable because
-    Google only issues upload-capable tokens when the scope is in the request.
+    NOTE: `youtube.upload` only grants videos.insert — it does NOT cover
+    videos.update or videos.delete, despite sounding like a general "manage
+    my videos" scope. Unpublish/delete calls videos.update/videos.delete and
+    were failing with a 403 ACCESS_TOKEN_SCOPE_INSUFFICIENT (confirmed via
+    Google's tokeninfo endpoint: a connected account's token only carried
+    readonly+upload) — the takedown never reached YouTube even though the
+    app reported success locally. `youtube.force-ssl` is the scope Google's
+    own docs list for videos.update/videos.delete.
+
+    Each time a scope is added here, existing connected users need to
+    re-consent (one-time re-connect) — Google only issues tokens for scopes
+    present in the authorization request at consent time.
     """
 
     # ── Google OAuth endpoints ────────────────────────────────────────────────
@@ -49,6 +59,7 @@ class YouTubePlatformAdapter(PlatformInterface):
     SCOPES = [
         "https://www.googleapis.com/auth/youtube.readonly",
         "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube.force-ssl",
     ]
 
     def __init__(self):
@@ -494,6 +505,14 @@ class YouTubePlatformAdapter(PlatformInterface):
                 "ffmpeg", "-y",
                 "-loop", "1", "-i", image_path,             # Static image
                 "-i", audio_path,                            # Audio track
+                # Cover art is commonly square (or portrait) album art, but
+                # this video's frame was previously left at the image's own
+                # dimensions — a square/portrait output under 3 minutes gets
+                # auto-classified as a YouTube Short regardless of intent
+                # (reproduced: a 1000x1000 cover produced a 1000x1000 video).
+                # Scale to fit inside a 16:9 landscape canvas and pad the rest
+                # with black so every cover art shape lands as a normal video.
+                "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black",
                 "-c:v", "libx264",
                 "-tune", "stillimage",
                 "-c:a", "aac",
@@ -507,7 +526,12 @@ class YouTubePlatformAdapter(PlatformInterface):
             # Black frame 1920x1080
             cmd = [
                 "ffmpeg", "-y",
-                "-f", "lavfi", "-i", "color=c=black:size=1920x1080:rate=1",
+                # rate=1 (1 fps) here previously broke -shortest: at that low
+                # a frame rate the muxer massively overshoots the audio's real
+                # end instead of cutting there (reproduced: a 3:57 track came
+                # out as a 5:00 video). 25fps matches the cover-art branch's
+                # default and cuts accurately.
+                "-f", "lavfi", "-i", "color=c=black:size=1920x1080:rate=25",
                 "-i", audio_path,
                 "-c:v", "libx264",
                 "-tune", "stillimage",
@@ -632,6 +656,18 @@ class YouTubePlatformAdapter(PlatformInterface):
 
     # ── Removal ───────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _raise_with_scope_hint(resp: httpx.Response) -> None:
+        """Same as resp.raise_for_status(), but turns the specific "token
+        doesn't have this scope" 403 into a message that tells the artist
+        what to actually do about it, instead of a raw API error dump."""
+        if resp.status_code == 403 and "ACCESS_TOKEN_SCOPE_INSUFFICIENT" in resp.text:
+            raise RuntimeError(
+                "Your YouTube connection is missing a permission this action needs. "
+                "Reconnect your YouTube account (Integrations) and try again."
+            )
+        resp.raise_for_status()
+
     async def unpublish(self, platform_track_id: str, account: "SocialAccount") -> bool:
         """
         Set the video to private — reversible from YouTube Studio directly,
@@ -652,7 +688,7 @@ class YouTubePlatformAdapter(PlatformInterface):
                     "status": {"privacyStatus": "private"},
                 }).encode(),
             )
-            resp.raise_for_status()
+            self._raise_with_scope_hint(resp)
         return True
 
     async def delete_content(self, platform_track_id: str, account: "SocialAccount") -> bool:
@@ -667,7 +703,7 @@ class YouTubePlatformAdapter(PlatformInterface):
             # YouTube returns 204 on success; treat "already gone" (404) as
             # success too — the end state the caller wants is already true.
             if resp.status_code not in (204, 404):
-                resp.raise_for_status()
+                self._raise_with_scope_hint(resp)
         return True
 
 

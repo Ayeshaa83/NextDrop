@@ -275,6 +275,12 @@ export default function TrackDetailPage() {
                         <p className="text-sm text-amber-200">Awaiting admin review before it can be distributed.</p>
                     </div>
                 )}
+                {track.approval_status === 'under_review' && (
+                    <div className="mt-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+                        <Clock className="size-4 text-blue-400 shrink-0" />
+                        <p className="text-sm text-blue-200">An admin is actively reviewing this track before it can be distributed.</p>
+                    </div>
+                )}
             </motion.div>
 
             {/* Hit Score — AI-computed at upload time, unrelated to publish status */}
@@ -573,6 +579,7 @@ export default function TrackDetailPage() {
                     onClose={() => setShowDistribution(false)}
                     trackId={track.id}
                     trackTitle={track.title}
+                    trackIsPublic={track.is_public}
                 />
             )}
         </div>

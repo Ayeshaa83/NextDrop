@@ -56,3 +56,5 @@ scikit-learn==1.9.0
 xgboost==3.4.0
 # LLM-backed insight generation (app/ml/insights/llm_generator.py)
 huggingface_hub==1.27.0
+# Hourly background platform-analytics refresh (app/services/scheduler.py)
+APScheduler==3.11.0

@@ -30,10 +30,15 @@ class UTCDateTime(TypeDecorator):
     impl = _DateTime
     cache_ok = True
 
-    def process_bind_param(self, value: datetime | None, dialect) -> datetime | None:
+    def process_bind_param(self, value, dialect):
         # Written values are naive UTC everywhere in this codebase already
         # (datetime.utcnow()); only normalize if something aware slips in.
-        if value is not None and value.tzinfo is not None:
+        # `date` is deliberately excluded from the isinstance check below:
+        # `datetime` is a subclass of `date`, so a bare `date` (e.g. from
+        # `date.today()`, used in >=/<= range filters against a DateTime
+        # column) falls through untouched instead of crashing on the
+        # `.tzinfo` access a plain date doesn't have.
+        if isinstance(value, datetime) and value.tzinfo is not None:
             value = value.astimezone(timezone.utc).replace(tzinfo=None)
         return value
 

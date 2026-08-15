@@ -1,5 +1,7 @@
 from dotenv import load_dotenv
-load_dotenv()  
+load_dotenv()
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,16 +18,26 @@ from app.api.v1.endpoints import (
 )
 from app import models  # noqa: F401 — ensures models are registered with SQLAlchemy
 from app.sec.rate_limiter import limiter  # noqa: imported here for app.state binding
+from app.services.scheduler import start_scheduler, shutdown_scheduler
 
 from app.api.ai_features import router as ai_router
 
 # ── Rate Limiter ─────────────────────────────────────────────────────────────
 # limiter singleton is defined in app.sec.rate_limiter to avoid circular imports
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+    shutdown_scheduler()
+
+
 app = FastAPI(
     title="NextDrop API",
     description="Artist-First Music Distribution & Analytics Platform",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter

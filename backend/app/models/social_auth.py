@@ -93,6 +93,6 @@ class SocialStats(Base):
         """Check if cached stats are older than CACHE_TTL_HOURS."""
         if not self.fetched_at:
             return True
-        age = datetime.datetime.utcnow() - self.fetched_at
+        age = datetime.datetime.now(datetime.timezone.utc) - self.fetched_at
         return age.total_seconds() > (self.CACHE_TTL_HOURS * 3600)
 

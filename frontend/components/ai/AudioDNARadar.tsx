@@ -13,7 +13,6 @@ import {
 } from 'recharts';
 import {
     Fingerprint,
-    Sparkles,
     Bot,
     ChevronDown,
     Waves,
@@ -21,6 +20,7 @@ import {
     Zap,
     Palette,
     Activity,
+    Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { aiApi, AudioDNAData } from '@/lib/api';
@@ -87,7 +87,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
     if (!active || !payload?.[0]) return null;
     const d = payload[0].payload;
     return (
-        <div className="bg-[#0a0a0b]/95 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-3 shadow-2xl">
+        <div className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 shadow-xl">
             <p className="text-xs font-black text-white mb-1">{d.feature}</p>
             <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
@@ -149,27 +149,18 @@ export default function AudioDNARadar({ trackId, trackTitle = 'Neon Drive', clas
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className={cn(
-                'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#070708]/90 backdrop-blur-2xl',
-                'shadow-[0_0_60px_rgba(99,102,241,0.04)]',
-                className
-            )}
+            transition={{ duration: 0.5 }}
+            className={cn('card-premium p-6', className)}
         >
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-primary/[0.03] rounded-full blur-[100px] pointer-events-none" />
-
             {/* Header */}
-            <div className="relative z-10 p-6 pb-4 flex items-center justify-between border-b border-white/[0.04]">
+            <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                    <div className="relative">
-                        <div className="size-10 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center border border-white/[0.06]">
-                            <Fingerprint className="size-5 text-primary" />
-                        </div>
-                        <div className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-primary shadow-[0_0_8px_#6366f1,0_0_16px_#6366f1] animate-pulse" />
+                    <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                        <Fingerprint className="size-4 text-primary" />
                     </div>
                     <div>
-                        <h3 className="text-sm font-black uppercase tracking-[0.12em] text-white">Audio DNA Signature</h3>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">16 Acoustic Features vs Genre Benchmark</p>
+                        <h3 className="text-sm font-black uppercase tracking-widest text-white">Audio DNA Signature</h3>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">16 Acoustic Features vs Genre Benchmark</p>
                     </div>
                 </div>
 
@@ -185,19 +176,19 @@ export default function AudioDNARadar({ trackId, trackTitle = 'Neon Drive', clas
             </div>
 
             {loading ? (
-                <div className="p-8 flex items-center justify-center min-h-[360px]">
+                <div className="flex items-center justify-center min-h-[320px]">
                     <div className="text-center space-y-3">
-                        <div className="size-10 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
+                        <div className="size-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Extracting Audio DNA...</p>
                     </div>
                 </div>
             ) : data && (
-                <div className="relative z-10 p-6 space-y-4">
-                    {/* Audio Signature Wireframe Banner */}
-                    <div className="p-4 rounded-2xl bg-[#050505] border border-white/[0.04] flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="space-y-4">
+                    {/* Audio Signature Banner */}
+                    <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex flex-wrap items-center justify-between gap-3 text-xs">
                         <div className="flex items-center gap-2 text-primary font-black uppercase tracking-widest text-[10px]">
                             <Activity className="size-4" />
-                            Audio Signature:
+                            Audio Signature
                         </div>
                         <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-white">
                             <span className="bg-white/5 px-3 py-1 rounded-lg border border-white/5">Energy: <strong className="text-amber-400">85%</strong></span>
@@ -208,14 +199,14 @@ export default function AudioDNARadar({ trackId, trackTitle = 'Neon Drive', clas
                     </div>
 
                     {/* Category Toggle Pills */}
-                    <div className="flex items-center gap-2 overflow-x-auto pt-1">
+                    <div className="flex items-center gap-2 overflow-x-auto pt-1 custom-scrollbar">
                         <button
                             onClick={() => setActiveCategory(null)}
                             className={cn(
-                                'shrink-0 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all cursor-pointer',
+                                'shrink-0 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors',
                                 !activeCategory
                                     ? 'bg-white/10 border-white/20 text-white'
-                                    : 'bg-white/[0.02] border-white/[0.04] text-slate-500 hover:text-white'
+                                    : 'bg-white/[0.02] border-white/5 text-slate-500 hover:text-white'
                             )}
                         >
                             All 16 Features
@@ -227,10 +218,10 @@ export default function AudioDNARadar({ trackId, trackTitle = 'Neon Drive', clas
                                     key={cat.category}
                                     onClick={() => setActiveCategory(activeCategory === cat.category ? null : cat.category)}
                                     className={cn(
-                                        'shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all cursor-pointer',
+                                        'shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors',
                                         activeCategory === cat.category
                                             ? 'border-current text-white'
-                                            : 'bg-white/[0.02] border-white/[0.04] text-slate-500 hover:text-white'
+                                            : 'bg-white/[0.02] border-white/5 text-slate-500 hover:text-white'
                                     )}
                                     style={activeCategory === cat.category ? {
                                         background: `${cat.color}15`,
@@ -263,15 +254,14 @@ export default function AudioDNARadar({ trackId, trackTitle = 'Neon Drive', clas
                                     fill="url(#dnaGradient)"
                                     fillOpacity={0.35}
                                     dot={{ r: 3, fill: '#6366f1', stroke: '#050505', strokeWidth: 2 }}
-                                    animationDuration={1200}
+                                    animationDuration={800}
                                     animationEasing="ease-out"
                                 />
                                 <Tooltip content={<CustomTooltip />} />
                                 <defs>
                                     <radialGradient id="dnaGradient" cx="50%" cy="50%" r="50%">
-                                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.6} />
-                                        <stop offset="50%" stopColor="#00f2fe" stopOpacity={0.3} />
-                                        <stop offset="100%" stopColor="#a855f7" stopOpacity={0.1} />
+                                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.5} />
+                                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.05} />
                                     </radialGradient>
                                 </defs>
                             </RadarChart>
@@ -282,7 +272,7 @@ export default function AudioDNARadar({ trackId, trackTitle = 'Neon Drive', clas
                     <div>
                         <button
                             onClick={() => setShowDetails(!showDetails)}
-                            className="w-full flex items-center justify-between p-3.5 rounded-xl bg-[#050505] border border-white/[0.04] hover:border-primary/20 transition-all cursor-pointer"
+                            className="w-full flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors"
                         >
                             <div className="flex items-center gap-2">
                                 <Bot className="size-4 text-primary" />
@@ -300,10 +290,10 @@ export default function AudioDNARadar({ trackId, trackTitle = 'Neon Drive', clas
                                     className="overflow-hidden mt-3"
                                 >
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        {data.categories.map((cat, ci) => {
+                                        {data.categories.map((cat) => {
                                             const Icon = CATEGORY_ICONS[cat.category] || Sparkles;
                                             return (
-                                                <div key={cat.category} className="p-3.5 rounded-xl bg-[#050505] border border-white/[0.04] space-y-2.5">
+                                                <div key={cat.category} className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-2.5">
                                                     <div className="flex items-center gap-2">
                                                         <Icon className="size-3.5" style={{ color: cat.color }} />
                                                         <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: cat.color }}>
@@ -340,4 +330,3 @@ export default function AudioDNARadar({ trackId, trackTitle = 'Neon Drive', clas
         </motion.div>
     );
 }
-

@@ -2,7 +2,7 @@
 Spotify OAuth Endpoints
 Handles Connect Spotify flow for artists.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -101,7 +101,7 @@ async def spotify_callback(
             for k, v in account_data.items():
                 if hasattr(existing_account, k) and v is not None:
                     setattr(existing_account, k, v)
-            existing_account.updated_at = datetime.utcnow()
+            existing_account.updated_at = datetime.now(timezone.utc)
         else:
             # Encrypt tokens before saving
             if "access_token" in account_data:
@@ -147,7 +147,7 @@ def spotify_status(
     if not account:
         return SpotifyConnectionStatus(connected=False, provider="spotify")
     
-    is_expired = account.expires_at and account.expires_at < datetime.utcnow()
+    is_expired = account.expires_at and account.expires_at < datetime.now(timezone.utc)
     
     return SpotifyConnectionStatus(
         connected=True,
@@ -185,7 +185,7 @@ async def spotify_refresh_token(
         for k, v in new_tokens.items():
             if hasattr(account, k) and v is not None:
                 setattr(account, k, v)
-        account.updated_at = datetime.utcnow()
+        account.updated_at = datetime.now(timezone.utc)
         
         db.commit()
         return {"message": "Token refreshed successfully", "expires_at": account.expires_at}
@@ -238,7 +238,7 @@ async def get_user_top_tracks(
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not connected")
     
-    if account.expires_at and account.expires_at < datetime.utcnow():
+    if account.expires_at and account.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
     
     try:
@@ -269,7 +269,7 @@ async def get_user_top_artists(
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not connected")
     
-    if account.expires_at and account.expires_at < datetime.utcnow():
+    if account.expires_at and account.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
     
     try:

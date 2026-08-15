@@ -69,7 +69,7 @@ def get_admin_stats(
     total_tracks = db.query(func.count(Track.id)).scalar() or 0
     
     pending = db.query(func.count(Track.id)).filter(
-        Track.approval_status == ApprovalStatus.PENDING.value
+        Track.approval_status.in_([ApprovalStatus.PENDING.value, ApprovalStatus.UNDER_REVIEW.value])
     ).scalar() or 0
     
     approved = db.query(func.count(Track.id)).filter(
@@ -99,11 +99,16 @@ def get_pending_tracks(
     """
     Get all tracks pending admin approval.
     Used for plagiarism checks and content moderation.
+
+    Includes UNDER_REVIEW alongside PENDING — marking a track "under review"
+    is meant to flag it as being actively looked at, not to remove it from
+    the queue. Filtering it out here left it with no way back into view or
+    to ever get approved/rejected.
     """
     from app.models import Artist
-    
+
     query = db.query(Track).filter(
-        Track.approval_status == ApprovalStatus.PENDING.value
+        Track.approval_status.in_([ApprovalStatus.PENDING.value, ApprovalStatus.UNDER_REVIEW.value])
     ).order_by(Track.id.desc())
     
     total = query.count()

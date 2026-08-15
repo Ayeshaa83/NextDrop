@@ -33,7 +33,7 @@ export default function MusicLibrary() {
     const { playTracks, currentTrack, isPlaying, toggle } = usePlayer();
     const router = useRouter();
 
-    const [distributionTrack, setDistributionTrack] = useState<{id: number, title: string} | null>(null);
+    const [distributionTrack, setDistributionTrack] = useState<{id: number, title: string, is_public: boolean} | null>(null);
     const [menuOpenFor, setMenuOpenFor] = useState<number | null>(null);
     const [confirmAction, setConfirmAction] = useState<{ track: Track; type: 'unpublish' | 'delete' } | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
@@ -47,9 +47,13 @@ export default function MusicLibrary() {
 
     const openUnpublishConfirm = (track: Track) => {
         setConfirmAction({ track, type: 'unpublish' });
-        // Already known without asking the server — skip straight to the
-        // informational state instead of offering a pointless confirm step.
-        setOutcome(track.is_public ? null : 'already_unpublished');
+        // NOT safe to infer "already unpublished, nothing to do" from
+        // track.is_public alone here — a track can be is_public=false from
+        // a *previous* unpublish attempt whose platform takedown failed
+        // (still genuinely live there), in which case there's real retry
+        // work to do. Only the server knows whether any distribution is
+        // still actually live, so always ask it rather than assuming.
+        setOutcome(null);
     };
 
     const handleConfirmAction = async () => {
@@ -211,17 +215,25 @@ export default function MusicLibrary() {
                     const isProcessing = track.processing_status === 'pending' || track.processing_status === 'processing';
                     const isScheduled = track.release_date && new Date(track.release_date) > new Date();
                     const isRejected = track.approval_status === 'rejected';
-                    const awaitingApproval = track.approval_status === 'pending' || track.approval_status === 'under_review';
+                    const isUnderReview = track.approval_status === 'under_review';
+                    const isPendingApproval = track.approval_status === 'pending';
+                    const awaitingApproval = isPendingApproval || isUnderReview;
 
                     const statusText = isProcessing ? 'AI Analyzing...'
                         : isRejected ? 'Rejected'
                         : isScheduled ? `Scheduled ${new Date(track.release_date!).toLocaleDateString()}`
-                        : awaitingApproval ? 'Awaiting Approval'
+                        // "Under Review" means an admin is actively looking at it right
+                        // now, distinct from just sitting in the queue — worth calling
+                        // out separately rather than collapsing both into one label.
+                        : isUnderReview ? 'Under Review'
+                        : isPendingApproval ? 'Awaiting Approval'
                         : 'Ready to Distribute';
                     const statusStyle = isProcessing
                         ? 'text-primary bg-primary/10 border-primary/20 animate-pulse'
                         : isRejected
                         ? 'text-red-400 bg-red-400/10 border-red-400/20'
+                        : isUnderReview
+                        ? 'text-blue-400 bg-blue-400/10 border-blue-400/20'
                         : isScheduled || awaitingApproval
                         ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
                         : 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
@@ -297,7 +309,7 @@ export default function MusicLibrary() {
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setDistributionTrack({ id: track.id, title: track.title });
+                                        setDistributionTrack({ id: track.id, title: track.title, is_public: track.is_public });
                                     }}
                                     className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-primary text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all opacity-0 group-hover:opacity-100"
                                 >
@@ -383,6 +395,7 @@ export default function MusicLibrary() {
                     onClose={() => setDistributionTrack(null)}
                     trackId={distributionTrack.id}
                     trackTitle={distributionTrack.title}
+                    trackIsPublic={distributionTrack.is_public}
                 />
             )}
 
@@ -427,6 +440,12 @@ function ConfirmActionModal({
     // Once we know the outcome (client-side pre-check, or the API told us),
     // this is purely informational — no destructive action left to confirm.
     const isInfoOnly = outcome !== null;
+    // outcome === 'unpublished' only means "we attempted a takedown" — it
+    // does NOT mean every platform actually succeeded. Saying "This track
+    // has been unpublished" when the real YouTube video is still live was
+    // actively misleading; the content below (failedPlatforms) always had
+    // the truth, but the headline was overclaiming success on top of it.
+    const partialFailure = outcome === 'unpublished' && failedPlatforms.length > 0;
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -447,14 +466,15 @@ function ConfirmActionModal({
                     <div className={cn(
                         "size-10 rounded-full flex items-center justify-center shrink-0",
                         isInfoOnly
-                            ? outcome === 'unpublished' ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-500/10 text-slate-400"
+                            ? partialFailure ? "bg-amber-500/10 text-amber-400"
+                            : outcome === 'unpublished' ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-500/10 text-slate-400"
                             : isDelete ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400"
                     )}>
                         {isDelete && !isInfoOnly ? <Trash2 className="size-5" /> : <EyeOff className="size-5" />}
                     </div>
                     <div className="min-w-0">
                         <h3 className="text-white font-black text-lg">
-                            {isInfoOnly ? OUTCOME_COPY[outcome].title : isDelete ? 'Delete Track' : 'Unpublish Track'}
+                            {isInfoOnly ? (partialFailure ? 'Partially Unpublished' : OUTCOME_COPY[outcome].title) : isDelete ? 'Delete Track' : 'Unpublish Track'}
                         </h3>
                         <p className="text-xs text-slate-500 truncate">{track.title}</p>
                     </div>
@@ -462,7 +482,9 @@ function ConfirmActionModal({
 
                 <p className="text-sm text-slate-400 leading-relaxed">
                     {isInfoOnly
-                        ? OUTCOME_COPY[outcome].message
+                        ? partialFailure
+                            ? "Hidden from your NextDrop profile, but the platform takedown below failed — it's likely still live there until you retry or remove it manually."
+                            : OUTCOME_COPY[outcome].message
                         : isDelete
                             ? "Permanently deletes this track — its audio, cover art, and any live platform listing — and cannot be undone. Blocked automatically if it's already earned money, to protect your balance."
                             : "Takes the track down (privately, reversibly) from any platform it's live on and hides it from your public profile. Analytics and earnings history are kept."}
@@ -492,7 +514,11 @@ function ConfirmActionModal({
                     >
                         {isInfoOnly || failedPlatforms.length > 0 ? 'Close' : 'Cancel'}
                     </button>
-                    {!isInfoOnly && (
+                    {/* Shown for the normal pre-confirm ask, AND when we already
+                        have an outcome but a platform still failed — that's a
+                        real retry, not just an FYI, so it needs an actual
+                        button rather than only a Close. */}
+                    {(!isInfoOnly || failedPlatforms.length > 0) && (
                         <button
                             onClick={onConfirm}
                             disabled={loading}

@@ -38,10 +38,14 @@ RISING_STARS_WINDOW_DAYS = 30
 
 
 def _lifetime_streams_by_artist(db: Session) -> dict[int, int]:
-    """Top Tracks — total streams across an artist's whole catalog."""
+    """Top Tracks — total streams across an artist's currently-public catalog.
+    An unpublished track stops contributing to its artist's rank the same
+    way it stops contributing to their dashboard total — otherwise an artist
+    could keep ranking on the strength of a track nobody can actually hear."""
     rows = (
         db.query(Track.artist_id, func.coalesce(func.sum(TrackAnalytics.stream_count), 0))
         .join(TrackAnalytics, TrackAnalytics.track_id == Track.id)
+        .filter(Track.is_public.is_(True))
         .group_by(Track.artist_id)
         .all()
     )
@@ -83,11 +87,12 @@ def _collab_counts_by_artist(db: Session, *, open_verse_only: bool) -> dict[int,
 def _recent_streams_by_artist(db: Session, since: datetime.date) -> dict[int, int]:
     """Rising Stars — streams in the last RISING_STARS_WINDOW_DAYS days, so
     this rewards current momentum rather than lifetime totals (that's what
-    Top Tracks already measures)."""
+    Top Tracks already measures). Same is_public rule as everywhere else
+    streams get summed: an unpublished track doesn't count."""
     rows = (
         db.query(Track.artist_id, func.coalesce(func.sum(AnalyticsSnapshot.streams), 0))
         .join(AnalyticsSnapshot, AnalyticsSnapshot.track_id == Track.id)
-        .filter(AnalyticsSnapshot.snapshot_date >= since)
+        .filter(Track.is_public.is_(True), AnalyticsSnapshot.snapshot_date >= since)
         .group_by(Track.artist_id)
         .all()
     )

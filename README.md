@@ -16,7 +16,7 @@ Everything below is implemented and working end-to-end, not aspirational.
 - **Onboarding**: new artist profiles require admin approval before they can upload or distribute
 - **Upload**: drag-and-drop audio with AI-assisted metadata (genre/BPM/key/mood via a Musicnn tagger + XGBoost hit-score model), cover artwork, ISRC/explicit tags, split-sheet collaborators with royalty percentages, and optional scheduled release dates
 - **Distribution**: real YouTube publishing (audio → video via ffmpeg, resumable upload to the artist's connected channel) with territory selection; Spotify connects for listening analytics (direct upload requires a distributor agreement, which is out of scope for an indie platform)
-- **Analytics**: streams-over-time, platform breakdown, country-level growth, all backed by a real daily-snapshot pipeline — plus AI-written performance insights, release-timing recommendations, and territory reasoning (via the Claude API, with heuristic fallbacks when no API key is set)
+- **Analytics**: streams-over-time, platform breakdown, country-level growth, all backed by a real daily-snapshot pipeline — plus AI-written performance insights, release-timing recommendations, and territory reasoning
 - **Earnings**: a wallet computed from real per-platform stream rates and each artist's split-sheet share, a downloadable CSV statement, and a mock withdrawal flow
 - **Community**: Jam Jar (post snippets, like, comment, send collab requests), an Open Verse collaboration marketplace, and a leaderboard with real per-category rankings
 - **Notifications**: an in-app notification bell (polls for updates) and email notifications for every approval/rejection/payout/verification event

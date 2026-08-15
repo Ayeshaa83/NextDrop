@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRequireAuth } from '@/lib/auth';
 import { useDashboard, useTimeseries, useTerritories, formatNumber } from '@/lib/hooks';
 import {
-    LineChart, Download, Sparkles, Globe2, AlertCircle, PlayCircle, MapPin
+    LineChart, Download, Globe2, AlertCircle, PlayCircle, MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -41,6 +41,18 @@ const PLATFORM_COLORS: Record<string, string> = {
     'TikTok': '#00f2fe'
 };
 
+// Shared animation rhythm — same stagger used on Music Library, so moving
+// between pages doesn't feel like a different app.
+const container = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+};
+
+const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 }
+};
+
 export default function AnalyticsDashboard() {
     const { user } = useRequireAuth();
     const { data: dashboard, loading } = useDashboard();
@@ -64,18 +76,8 @@ export default function AnalyticsDashboard() {
 
     const territories = territoryData?.territories || [];
 
-    const container = {
-        hidden: { opacity: 0 },
-        show: { opacity: 1, transition: { staggerChildren: 0.1 } }
-    };
-
-    const item = {
-        hidden: { opacity: 0, y: 20 },
-        show: { opacity: 1, y: 0 }
-    };
-    
     // Transform backend dict to recharts array
-    const platformData = dashboard?.platform_breakdown 
+    const platformData = dashboard?.platform_breakdown
         ? Object.entries(dashboard.platform_breakdown)
             .filter(([_, val]) => val > 0)
             .map(([name, value]) => ({
@@ -92,33 +94,28 @@ export default function AnalyticsDashboard() {
             {/* Header */}
             <motion.header variants={item} className="flex flex-col md:flex-row md:justify-between md:items-end gap-6">
                 <div className="space-y-1">
-                    <p className="text-primary font-black tracking-[0.2em] text-[10px] uppercase flex items-center gap-2">
-                        <Sparkles className="size-3" /> Algorithmic Intelligence
-                    </p>
+                    <p className="text-primary font-black tracking-[0.2em] text-[10px] uppercase">Artist Insights</p>
                     <h1 className="text-4xl font-black tracking-tight text-white">Deep Analytics</h1>
                 </div>
                 <div className="flex gap-4">
-                    <button className="px-6 py-2.5 bg-white/5 border border-white/5 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2">
+                    <button className="px-6 py-2.5 bg-white/5 border border-white/5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2">
                         <LineChart className="size-4" /> Custom Range
                     </button>
-                    <button className="px-8 py-3 bg-white text-black hover:scale-105 active:scale-95 transition-transform rounded-xl text-sm font-black flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                    <button className="px-8 py-3 bg-primary text-white rounded-xl text-sm font-black flex items-center gap-2 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/20">
                         <Download className="size-4" /> Export Report
                     </button>
                 </div>
             </motion.header>
 
-            {/* 1. AI Command Center — live components backed by /api/ai */}
-            <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                {/* Smart Release Timer (data-driven golden window) */}
+            {/* AI Command Center — live components backed by /api/ai */}
+            <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                 <ReleaseTimerDial className="col-span-1 xl:col-span-4" />
 
-                {/* AI Insights */}
                 <div className="col-span-1 xl:col-span-8 flex flex-col">
-                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">
                         Natural Language Insights
-                        <span className="text-[9px] font-black uppercase bg-primary/20 text-primary px-2 py-0.5 rounded-full border border-primary/20">AI-Generated</span>
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1">
                         <SmartInsightCard
                             trackTitle="Catalog Performance"
                             currentStreams={lastWeek || dashboard?.total_streams || 0}
@@ -134,16 +131,16 @@ export default function AnalyticsDashboard() {
                 <AudioDNARadar trackTitle="Neon Drive" />
             </motion.div>
 
-            {/* 2. API-Driven Performance Suite */}
-            <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            {/* Performance Suite */}
+            <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 {/* Global Stream Trajectory */}
-                <div className="col-span-1 xl:col-span-2 card-premium p-8 relative overflow-hidden flex flex-col">
-                    <div className="flex justify-between items-start mb-8 z-10">
+                <div className="col-span-1 xl:col-span-2 card-premium p-6 flex flex-col">
+                    <div className="flex justify-between items-start mb-8">
                         <div>
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                            <h3 className="text-lg font-bold text-white">
                                 Global Stream Trajectory
                             </h3>
-                            <p className="text-slate-500 text-xs font-medium focus:outline-none">Live velocity vs Predictive model</p>
+                            <p className="text-slate-500 text-xs font-medium">Streams over the last 30 days</p>
                         </div>
                         <div className="text-right">
                             <p className="text-3xl font-black text-white">{formatNumber(dashboard?.total_streams || 0)}</p>
@@ -158,7 +155,7 @@ export default function AnalyticsDashboard() {
                         </div>
                     </div>
 
-                    <div className="h-[300px] w-full -ml-4 z-10">
+                    <div className="h-[300px] w-full -ml-4">
                         {trajectoryData.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-8">
                                 <LineChart className="size-8 text-slate-600" />
@@ -196,9 +193,9 @@ export default function AnalyticsDashboard() {
                 </div>
 
                 {/* Right Column: Platform & Geography */}
-                <div className="col-span-1 flex flex-col gap-8">
+                <div className="col-span-1 flex flex-col gap-6">
                     {/* Platform Distribution */}
-                    <div className="card-premium p-6 flex flex-col flex-1 border border-white/5">
+                    <div className="card-premium p-6 flex flex-col flex-1">
                         <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-6">Platform Share</h3>
                         <div className="flex-1 flex items-center justify-between">
                             <div className="h-32 w-1/2">
@@ -224,13 +221,13 @@ export default function AnalyticsDashboard() {
                     </div>
 
                     {/* Geographic Heatmap */}
-                    <div className="card-premium p-6 border border-white/5 relative">
+                    <div className="card-premium p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
                                 <Globe2 className="size-4" /> Top Territories
                             </h3>
                         </div>
-                        
+
                         <div className="space-y-1">
                             {territories.length === 0 ? (
                                 <p className="text-xs text-slate-500 font-medium py-4 text-center">
@@ -238,7 +235,7 @@ export default function AnalyticsDashboard() {
                                     include regional attribution.
                                 </p>
                             ) : territories.slice(0, 5).map(region => (
-                                <div key={region.country} className="relative group/territory rounded-xl p-3 hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
+                                <div key={region.country} className="rounded-xl p-3 hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm font-bold text-white flex items-center gap-2">
                                             <MapPin className="size-3 text-slate-500" /> {countryName(region.country)}
@@ -264,9 +261,9 @@ export default function AnalyticsDashboard() {
                                                 initial={{ opacity: 0, height: 0 }}
                                                 animate={{ opacity: 1, height: 'auto' }}
                                                 exit={{ opacity: 0, height: 0 }}
-                                                className="overflow-hidden mt-2"
+                                                className="overflow-hidden"
                                             >
-                                                <div className="p-3 bg-[#050505] rounded-lg border border-primary/20 text-xs text-primary-100 font-medium leading-relaxed">
+                                                <div className="p-3 mt-2 bg-white/[0.03] rounded-lg border border-white/5 text-xs text-slate-300 font-medium leading-relaxed">
                                                     {formatNumber(region.streams)} streams in the last 30 days
                                                     {region.previous_streams > 0 && (
                                                         <> (vs {formatNumber(region.previous_streams)} the previous month)</>
@@ -282,44 +279,38 @@ export default function AnalyticsDashboard() {
                 </div>
             </motion.div>
 
-            {/* 3. The Action Center */}
-            <motion.div variants={item} className="mt-12 space-y-6">
+            {/* Next Strategic Moves */}
+            <motion.div variants={item} className="space-y-4">
                 <div className="flex items-center gap-3">
-                    <AlertCircle className="size-6 text-[#ff2a5f]" />
-                    <h2 className="text-2xl font-black text-white tracking-tight">Next Strategic Moves</h2>
+                    <AlertCircle className="size-5 text-primary" />
+                    <h2 className="text-xl font-black text-white tracking-tight">Next Strategic Moves</h2>
                 </div>
-                
-                <div className="card-premium overflow-hidden border border-[#ff2a5f]/10">
-                    {/* Action 1 */}
-                    <div className="p-6 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-6 hover:bg-[#ff2a5f]/5 transition-colors relative group">
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff2a5f] scale-y-0 group-hover:scale-y-100 transition-transform origin-top" />
+
+                <div className="card-premium divide-y divide-white/5">
+                    <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
-                            <p className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+                            <p className="text-sm font-bold text-white mb-1">
                                 High engagement detected at 0:45
-                                <span className="text-emerald-400">→</span>
                             </p>
                             <p className="text-xs font-medium text-slate-400">
-                                This section has a high replay matrix. Ideal for short-form video.
+                                This section has a high replay rate. Ideal for short-form video.
                             </p>
                         </div>
-                        <button className="px-5 py-3 bg-[#ff2a5f] hover:bg-[#ff2a5f]/80 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-colors shadow-[0_0_15px_rgba(255,42,95,0.3)] shrink-0 flex items-center gap-2">
+                        <button className="px-5 py-2.5 bg-primary text-white text-xs font-black uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all shrink-0 flex items-center gap-2">
                             <PlayCircle className="size-4" /> Create 15s Snippet
                         </button>
                     </div>
 
-                    {/* Action 2 */}
-                    <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-6 hover:bg-white/5 transition-colors relative group">
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-top" />
+                    <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
-                            <p className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+                            <p className="text-sm font-bold text-white mb-1">
                                 Low retention at 2:10
-                                <span className="text-emerald-400">→</span>
                             </p>
                             <p className="text-xs font-medium text-slate-400">
-                                Drop in listener focus. The bridge arrangement extends past algorithmic norms.
+                                Drop in listener focus — the bridge arrangement runs longer than typical for this genre.
                             </p>
                         </div>
-                        <button className="px-5 py-3 bg-white/10 hover:bg-white/20 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-colors shrink-0">
+                        <button className="px-5 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-colors shrink-0">
                             Adjust Arrangement
                         </button>
                     </div>

@@ -10,8 +10,18 @@ def get_analytics_by_track_id(db: Session, track_id: int):
     return db.query(TrackAnalytics).filter(TrackAnalytics.track_id == track_id).first()
 
 def get_all_analytics_for_artist(db: Session, artist_id: int):
-    """Get analytics for all tracks belonging to an artist."""
-    return db.query(TrackAnalytics).join(Track).filter(Track.artist_id == artist_id).all()
+    """Get analytics for all of an artist's currently-public tracks.
+
+    Feeds dashboard totals and revenue predictions — an unpublished track's
+    past stream count shouldn't keep inflating those once it's taken down,
+    even though the track's own analytics record is untouched (still visible
+    on that track's own page, just not rolled into artist-wide aggregates)."""
+    return (
+        db.query(TrackAnalytics)
+        .join(Track)
+        .filter(Track.artist_id == artist_id, Track.is_public.is_(True))
+        .all()
+    )
 
 def _ml_hit_score(db: Session, track_id: int) -> float | None:
     """Prefer the real XGBoost hit score from audio analysis when available."""
@@ -176,7 +186,9 @@ def record_snapshot(db: Session, track_id: int, platform: str, cumulative_total:
 
 
 def get_timeseries(db: Session, artist_id: int, days: int = 30):
-    """Daily stream totals per platform for all of an artist's tracks."""
+    """Daily stream totals per platform for all of an artist's currently-public
+    tracks — same is_public rule as the dashboard total, so the trajectory
+    chart and the headline number never disagree with each other."""
     since = datetime.date.today() - datetime.timedelta(days=days - 1)
     rows = (
         db.query(
@@ -185,7 +197,11 @@ def get_timeseries(db: Session, artist_id: int, days: int = 30):
             func.sum(AnalyticsSnapshot.streams).label("streams"),
         )
         .join(Track, Track.id == AnalyticsSnapshot.track_id)
-        .filter(Track.artist_id == artist_id, AnalyticsSnapshot.snapshot_date >= since)
+        .filter(
+            Track.artist_id == artist_id,
+            Track.is_public.is_(True),
+            AnalyticsSnapshot.snapshot_date >= since,
+        )
         .group_by(AnalyticsSnapshot.snapshot_date, AnalyticsSnapshot.platform)
         .order_by(AnalyticsSnapshot.snapshot_date)
         .all()
@@ -213,6 +229,7 @@ def get_territories(db: Session, artist_id: int, days: int = 60):
             .join(Track, Track.id == AnalyticsSnapshot.track_id)
             .filter(
                 Track.artist_id == artist_id,
+                Track.is_public.is_(True),
                 AnalyticsSnapshot.country.isnot(None),
                 AnalyticsSnapshot.snapshot_date >= start,
                 AnalyticsSnapshot.snapshot_date <= end,

@@ -5,13 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Globe2,
     X,
-    Sparkles,
     Bot,
     MapPin,
     ArrowUpRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { aiApi, TerritoryGrowthItem, TerritoryGrowthData } from '@/lib/api';
+import { aiApi, TerritoryGrowthData } from '@/lib/api';
 
 interface TerritoryGrowthMapProps {
     trackId?: string;
@@ -95,46 +94,31 @@ export default function TerritoryGrowthMap({ trackId, className }: TerritoryGrow
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className={cn(
-                'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0a0a0b]/90 backdrop-blur-2xl',
-                'shadow-[0_0_50px_rgba(0,242,254,0.04)]',
-                className
-            )}
+            className={cn('card-premium p-6', className)}
         >
             {/* Header */}
-            <div className="p-6 pb-4 flex items-center justify-between border-b border-white/[0.04]">
-                <div className="flex items-center gap-3">
-                    <div className="relative">
-                        <div className="size-9 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                            <Globe2 className="size-4 text-emerald-400" />
-                        </div>
-                        <div className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981,0_0_16px_#10b981] animate-pulse" />
-                    </div>
-                    <div>
-                        <h3 className="text-xs font-black uppercase tracking-[0.15em] text-emerald-400">Territory & Platform Focus</h3>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Regional AI Acceleration</p>
-                    </div>
+            <div className="flex items-center gap-3 mb-6">
+                <div className="size-9 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                    <Globe2 className="size-4 text-emerald-400" />
                 </div>
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                    <Sparkles className="size-3 text-emerald-400" />
-                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">India Regional Map</span>
+                <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-white">Territory &amp; Platform Focus</h3>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Regional AI Acceleration</p>
                 </div>
             </div>
 
-            {/* India Territory Focus Areas Wireframe */}
-            <div className="p-6 space-y-4">
-                <div className="space-y-1">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                        <MapPin className="size-3.5 text-emerald-400" />
-                        Ranked Indian Territory Focus Areas
-                    </h4>
-                </div>
+            {/* India Territory Focus Areas */}
+            <div className="space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <MapPin className="size-3.5 text-emerald-400" />
+                    Ranked Indian Territory Focus Areas
+                </h4>
 
                 <div className="space-y-3">
                     {INDIA_FOCUS_AREAS.map((area) => (
                         <div
                             key={area.rank}
-                            className="p-4 rounded-2xl bg-[#050505] border border-white/[0.04] hover:border-emerald-500/20 transition-all space-y-3"
+                            className="p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors space-y-3"
                         >
                             {/* Top Title & Score */}
                             <div className="flex items-center justify-between gap-3">
@@ -146,21 +130,18 @@ export default function TerritoryGrowthMap({ trackId, className }: TerritoryGrow
                                         {area.region} <span className="text-xs text-slate-500 font-normal">({area.platform})</span>
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <span className="text-xs font-black text-emerald-400">
-                                        Score: {area.score} / 100
-                                    </span>
-                                </div>
+                                <span className="text-xs font-black text-emerald-400 shrink-0">
+                                    Score: {area.score} / 100
+                                </span>
                             </div>
 
                             {/* Progress Bar */}
-                            <div className="h-2 w-full bg-white/[0.04] rounded-full overflow-hidden">
+                            <div className="h-1.5 w-full bg-white/[0.04] rounded-full overflow-hidden">
                                 <motion.div
                                     initial={{ width: 0 }}
                                     animate={{ width: `${area.score}%` }}
-                                    transition={{ duration: 1, ease: 'easeOut' }}
-                                    className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
-                                    style={{ boxShadow: '0 0 10px rgba(16, 185, 129, 0.3)' }}
+                                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                                    className="h-full rounded-full bg-emerald-400"
                                 />
                             </div>
 
@@ -180,7 +161,7 @@ export default function TerritoryGrowthMap({ trackId, className }: TerritoryGrow
                                             setActiveCountry(String(area.rank));
                                         }
                                     }}
-                                    className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-400 transition-colors cursor-pointer"
+                                    className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-400 transition-colors"
                                 >
                                     {activeCountry === String(area.rank) ? 'Hide' : 'Why?'}
                                 </button>
@@ -195,7 +176,7 @@ export default function TerritoryGrowthMap({ trackId, className }: TerritoryGrow
                                         exit={{ opacity: 0, height: 0 }}
                                         className="overflow-hidden"
                                     >
-                                        <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/15 flex items-start gap-2.5">
+                                        <div className="p-3 rounded-lg bg-white/[0.03] border border-white/5 flex items-start gap-2.5">
                                             <Bot className="size-4 text-emerald-400 shrink-0 mt-0.5" />
                                             <div className="flex-1">
                                                 <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400 mb-0.5">AI Regional Strategy</p>
@@ -203,7 +184,7 @@ export default function TerritoryGrowthMap({ trackId, className }: TerritoryGrow
                                             </div>
                                             <button
                                                 onClick={() => { setActiveReason(null); setActiveCountry(null); }}
-                                                className="text-slate-600 hover:text-white transition-colors cursor-pointer"
+                                                className="text-slate-600 hover:text-white transition-colors"
                                             >
                                                 <X className="size-3.5" />
                                             </button>
@@ -217,8 +198,7 @@ export default function TerritoryGrowthMap({ trackId, className }: TerritoryGrow
 
                 {/* Footer summary */}
                 {data?.summary && (
-                    <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-[10px] text-slate-400 font-medium flex items-center gap-2">
-                        <Sparkles className="size-3.5 text-emerald-400 shrink-0" />
+                    <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-slate-400 font-medium">
                         {data.summary}
                     </div>
                 )}
@@ -226,4 +206,3 @@ export default function TerritoryGrowthMap({ trackId, className }: TerritoryGrow
         </motion.div>
     );
 }
-

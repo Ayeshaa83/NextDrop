@@ -7,7 +7,7 @@ unpublish/delete endpoints (which need the identical prep before calling
 adapter.unpublish()/delete_content()) don't duplicate it a second and
 third time.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -29,12 +29,12 @@ async def get_ready_account(
     if not account:
         return None
 
-    if account.expires_at and account.expires_at < datetime.utcnow():
+    if account.expires_at and account.expires_at < datetime.now(timezone.utc):
         new_tokens = await adapter.refresh_token(account)
         for k, v in new_tokens.items():
             if hasattr(account, k) and v is not None:
                 setattr(account, k, v)
-        account.updated_at = datetime.utcnow()
+        account.updated_at = datetime.now(timezone.utc)
         db.commit()
 
     account.access_token = decrypt_token(account.access_token)
