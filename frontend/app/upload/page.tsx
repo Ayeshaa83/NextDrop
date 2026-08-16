@@ -135,13 +135,34 @@ export default function UploadReleasePage() {
         const url = URL.createObjectURL(f);
         const audio = new Audio();
         audio.preload = 'metadata';
-        audio.onloadedmetadata = () => {
-            if (Number.isFinite(audio.duration)) {
-                setDuration(Math.round(audio.duration));
+        let revoked = false;
+        const cleanup = () => {
+            if (!revoked) {
+                revoked = true;
+                URL.revokeObjectURL(url);
             }
-            URL.revokeObjectURL(url);
         };
-        audio.onerror = () => URL.revokeObjectURL(url);
+        const commit = () => {
+            if (Number.isFinite(audio.duration) && audio.duration > 0) {
+                setDuration(Math.round(audio.duration));
+                cleanup();
+            }
+        };
+        audio.onloadedmetadata = () => {
+            // Some MP3 encodings (common from AI-generation tools) report
+            // duration as Infinity on this first event instead of the real
+            // value — silently rejecting it left `duration` stuck at null,
+            // sent to the backend as 0. Seeking near the end forces the
+            // browser to recompute the real duration, firing durationchange
+            // with the correct value instead.
+            if (Number.isFinite(audio.duration) && audio.duration > 0) {
+                commit();
+            } else {
+                audio.currentTime = Number.MAX_SAFE_INTEGER;
+            }
+        };
+        audio.ondurationchange = commit;
+        audio.onerror = () => cleanup();
         audio.src = url;
     };
 

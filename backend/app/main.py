@@ -1,8 +1,6 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -18,26 +16,24 @@ from app.api.v1.endpoints import (
 )
 from app import models  # noqa: F401 — ensures models are registered with SQLAlchemy
 from app.sec.rate_limiter import limiter  # noqa: imported here for app.state binding
-from app.services.scheduler import start_scheduler, shutdown_scheduler
 
 from app.api.ai_features import router as ai_router
 
 # ── Rate Limiter ─────────────────────────────────────────────────────────────
 # limiter singleton is defined in app.sec.rate_limiter to avoid circular imports
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    start_scheduler()
-    yield
-    shutdown_scheduler()
-
+# NOTE: there is deliberately no background scheduler here. A fixed "refresh
+# every N minutes" job doesn't scale — YouTube's Data API v3 caps usage at a
+# daily quota (commonly 10,000 units/day; videos.list costs 1 unit/call), so
+# a job refreshing every live video on a fixed interval would grow with the
+# catalog and eventually exceed it. Analytics refresh is manual-only for now
+# (the "Refresh Analytics" button, plus an on-page-visit check capped at once
+# per 15 minutes) — revisit with quota-aware batching once deployed for real.
 
 app = FastAPI(
     title="NextDrop API",
     description="Artist-First Music Distribution & Analytics Platform",
     version="1.0.0",
-    lifespan=lifespan,
 )
 
 app.state.limiter = limiter

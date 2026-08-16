@@ -28,6 +28,7 @@ class TrackApprovalResponse(BaseModel):
     artist_name: Optional[str] = None
     file_url: str
     genre: Optional[str] = None
+    bpm: Optional[int] = None
     approval_status: str
     approval_notes: Optional[str] = None
     approved_by_id: Optional[int] = None
@@ -125,11 +126,12 @@ def get_pending_tracks(
             artist_name=artist.stage_name if artist else None,
             file_url=track.file_url,
             genre=track.genre,
+            bpm=track.bpm,
             approval_status=track.approval_status,
             approval_notes=track.approval_notes,
             approved_by_id=track.approved_by_id,
             approved_at=track.approved_at,
-            created_at=None,  # Track model doesn't have created_at yet
+            created_at=track.created_at,
             metadata_quality_score=(
                 float(track.ai_analysis.get("metadata_quality_score"))
                 if isinstance(track.ai_analysis, dict)
@@ -176,11 +178,12 @@ def get_all_tracks_admin(
             artist_name=artist.stage_name if artist else None,
             file_url=track.file_url,
             genre=track.genre,
+            bpm=track.bpm,
             approval_status=track.approval_status,
             approval_notes=track.approval_notes,
             approved_by_id=track.approved_by_id,
             approved_at=track.approved_at,
-            created_at=None,
+            created_at=track.created_at,
             metadata_quality_score=(
                 float(track.ai_analysis.get("metadata_quality_score"))
                 if isinstance(track.ai_analysis, dict)
@@ -269,11 +272,12 @@ def approve_track(
         artist_name=artist.stage_name if artist else None,
         file_url=track.file_url,
         genre=track.genre,
+        bpm=track.bpm,
         approval_status=track.approval_status,
         approval_notes=track.approval_notes,
         approved_by_id=track.approved_by_id,
         approved_at=track.approved_at,
-        created_at=None,
+        created_at=track.created_at,
         metadata_quality_score=(
             float(track.ai_analysis.get("metadata_quality_score"))
             if isinstance(track.ai_analysis, dict)
@@ -317,11 +321,12 @@ def mark_under_review(
         artist_name=artist.stage_name if artist else None,
         file_url=track.file_url,
         genre=track.genre,
+        bpm=track.bpm,
         approval_status=track.approval_status,
         approval_notes=track.approval_notes,
         approved_by_id=track.approved_by_id,
         approved_at=track.approved_at,
-        created_at=None,
+        created_at=track.created_at,
         metadata_quality_score=(
             float(track.ai_analysis.get("metadata_quality_score"))
             if isinstance(track.ai_analysis, dict)

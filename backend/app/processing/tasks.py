@@ -149,9 +149,18 @@ def process_track_analysis(track_id: int):
         # Update BPM and genre from analysis if not already set
         if analysis_result.get("features", {}).get("bpm") and not track.bpm:
             track.bpm = int(analysis_result["features"]["bpm"])
-        
+
         if analysis_result.get("predicted_genre") and not track.genre:
             track.genre = analysis_result["predicted_genre"]
+
+        # Duration is client-supplied at upload time (browser-extracted from
+        # the file's metadata) with no backend fallback if that fails — some
+        # audio encodings report an unusable duration client-side, which
+        # silently became 0. Librosa here reads the real decoded audio, so
+        # it's a reliable backstop whenever the client didn't get one.
+        duration_ms = analysis_result.get("features", {}).get("duration_ms")
+        if duration_ms and not track.duration:
+            track.duration = round(duration_ms / 1000)
         
         track.processing_status = ProcessingStatus.COMPLETED.value
         track.processing_error = None

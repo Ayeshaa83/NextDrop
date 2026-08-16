@@ -1,10 +1,14 @@
 """
-Shared platform-analytics refresh logic.
+Shared platform-analytics refresh logic, used by the manual "Refresh
+Analytics" endpoint (and the on-page-visit staleness check that calls the
+same endpoint from the frontend).
 
-Extracted from the `/analytics/tracks/{id}/refresh-platforms` endpoint so the
-exact same code path backs both the manual "Refresh Analytics" button and the
-hourly scheduled job (app/services/scheduler.py) — one place to fix instead
-of two copies quietly drifting apart.
+Deliberately no bulk/scheduled "refresh everything" job here — YouTube's
+Data API v3 enforces a daily quota (commonly 10,000 units/day; videos.list
+costs 1 unit/call), so refreshing every live video on a fixed interval
+would scale with the catalog size and eventually blow through it. Manual
+refresh is quota-safe because it's bounded by how many artists are actually
+looking, not by total video count.
 """
 import logging
 from datetime import datetime, timezone
@@ -86,33 +90,3 @@ async def refresh_track_analytics(db: Session, track_id: int, user_id: int) -> T
     db.commit()
     db.refresh(analytics)
     return analytics
-
-
-async def refresh_all_live_analytics(db: Session) -> dict:
-    """
-    Refreshes analytics for every track currently live on any platform,
-    across all artists — the body of the hourly scheduled job. Groups by
-    track so a track live on two platforms is only refreshed once, and
-    keeps going even if individual tracks fail.
-    """
-    from app.models import Track, Artist
-
-    track_owners = dict(
-        db.query(TrackDistribution.track_id, Artist.user_id)
-        .join(Track, Track.id == TrackDistribution.track_id)
-        .join(Artist, Artist.id == Track.artist_id)
-        .filter(TrackDistribution.status == DistributionStatus.LIVE.value)
-        .distinct()
-        .all()
-    )
-
-    succeeded, failed = 0, 0
-    for track_id, user_id in track_owners.items():
-        try:
-            await refresh_track_analytics(db, track_id, user_id)
-            succeeded += 1
-        except Exception:
-            failed += 1
-            logger.warning("Scheduled analytics refresh failed for track %s", track_id, exc_info=True)
-
-    return {"tracks_attempted": len(track_owners), "succeeded": succeeded, "failed": failed}

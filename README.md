@@ -124,7 +124,7 @@ cd backend
 python -m pytest tests/ -q
 ```
 
-The suite runs against an isolated in-memory SQLite database and never touches your configured production database or sends real emails.
+The suite runs against an isolated in-memory SQLite database and never touches your configured production database or sends real emails to artists. 
 
 ---
 
