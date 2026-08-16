@@ -1,13 +1,10 @@
 # NextDrop backend — FastAPI + Uvicorn
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install Linux system dependencies:
-# - ffmpeg: for YouTube distribution (audio -> MP4 conversion)
-# - libsndfile1: REQUIRED for librosa audio processing
-# - gcc, g++, make, libpq-dev: REQUIRED to build C-extensions (cffi, cryptography, scipy)
+# Install Linux system dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     gcc \
