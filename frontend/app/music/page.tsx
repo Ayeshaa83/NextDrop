@@ -248,7 +248,7 @@ export default function MusicLibrary() {
                             <div className="flex items-center gap-5">
                                 {/* Cover Art */}
                                 <div className="relative size-14 rounded-xl overflow-hidden shrink-0 shadow-lg">
-                                    <img src={track.cover_art_url || getAvatar(i)} className="size-full object-cover transition-transform group-hover:scale-110" />
+                                    <img src={track.cover_art_url || getAvatar(i)} className="size-full object-cover" />
                                     <div className={cn(
                                         "absolute inset-0 bg-black/40 transition-all flex items-center justify-center backdrop-blur-sm",
                                         currentTrack?.id === track.id && isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"

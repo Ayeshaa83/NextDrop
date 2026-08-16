@@ -118,7 +118,7 @@ export default function GlobalPlayer() {
                     "glass-pill rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden",
                     "flex items-center px-4 py-3 gap-6 select-none"
                 )}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
             >
                 {/* Track Info */}
                 <div className="flex items-center gap-3 min-w-0">
@@ -148,7 +148,7 @@ export default function GlobalPlayer() {
                         <SkipBack className="size-4 fill-current" />
                     </button>
                     <motion.button
-                        whileHover={{ scale: 1.1 }}
+                        whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={toggle}
                         className="size-9 rounded-full bg-white text-black flex items-center justify-center shadow-lg"
@@ -189,10 +189,8 @@ export default function GlobalPlayer() {
                                 animate={{ opacity: 1, width: "auto", scale: 1 }}
                                 exit={{ opacity: 0, width: 0, scale: 0.9 }}
                                 transition={{
-                                    type: "spring",
-                                    stiffness: 400,
-                                    damping: 30,
-                                    opacity: { duration: 0.2 }
+                                    duration: 0.2,
+                                    ease: "easeOut"
                                 }}
                                 className="flex items-center gap-4 pl-4 border-l border-white/10 overflow-hidden whitespace-nowrap"
                             >

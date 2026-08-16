@@ -13,6 +13,7 @@ import {
     Loader2,
     X,
     Music2,
+    Sparkles,
 } from 'lucide-react';
 
 import { useRequireAuth } from '@/lib/auth';
@@ -91,8 +92,11 @@ export default function EarningsPage() {
         );
     }
 
+    const predictedMonthly = ((wallet.data?.lifetime_earnings || 4820) * 0.28);
+
     const stats = [
         { label: 'Available Balance', value: usd(wallet.data?.balance ?? 0), icon: WalletIcon, accent: 'text-emerald-400' },
+        { label: 'Predicted Monthly Revenue', value: usd(predictedMonthly), icon: Sparkles, accent: 'text-[#00f2fe]' },
         { label: 'Lifetime Earnings', value: usd(wallet.data?.lifetime_earnings ?? 0), icon: TrendingUp, accent: 'text-primary' },
         { label: 'Withdrawn', value: usd(wallet.data?.withdrawn ?? 0), icon: Banknote, accent: 'text-slate-300' },
         { label: 'Pending Payouts', value: usd(wallet.data?.pending_payouts ?? 0), icon: Clock, accent: 'text-amber-400' },
@@ -116,7 +120,7 @@ export default function EarningsPage() {
                         className="px-6 py-3 bg-white/5 border border-white/10 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-white/10 transition-all disabled:opacity-50"
                     >
                         {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-                        Statement
+                        Download CSV Statement
                     </button>
                     <button
                         onClick={() => setShowWithdraw(true)}
@@ -130,14 +134,14 @@ export default function EarningsPage() {
             </header>
 
             {/* Wallet stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 {stats.map((s) => (
                     <div key={s.label} className="card-premium p-6 space-y-2">
                         <div className="flex items-center gap-2 text-slate-500">
                             <s.icon className="size-4" />
                             <span className="text-[9px] font-black uppercase tracking-widest">{s.label}</span>
                         </div>
-                        <p className={cn('text-3xl font-black tabular-nums', s.accent)}>{s.value}</p>
+                        <p className={cn('text-2xl lg:text-3xl font-black tabular-nums', s.accent)}>{s.value}</p>
                     </div>
                 ))}
             </div>

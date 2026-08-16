@@ -32,7 +32,7 @@ def create_artist_profile(
 
     return artist_crud.create_artist(db, artist_in=artist_in, user_id=current_user.id)
 
-@router.get("/me", response_model=ArtistResponse)
+@router.get("/me", response_model=ArtistResponse | None)
 def get_my_artist_profile(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user)
@@ -40,10 +40,7 @@ def get_my_artist_profile(
     """Get the current user's artist profile."""
     artist = artist_crud.get_artist_by_user_id(db, user_id=current_user.id)
     if not artist:
-        raise HTTPException(
-            status_code=404,
-            detail="Artist profile not found. Please create one first."
-        )
+        return None
     return artist
 
 @router.put("/me", response_model=ArtistResponse)

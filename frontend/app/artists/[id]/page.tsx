@@ -22,6 +22,12 @@ import { DEFAULT_AVATAR } from '@/lib/avatar';
 const FALLBACK_AVATAR = DEFAULT_AVATAR;
 const FALLBACK_COVER = 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=500&auto=format&fit=crop';
 
+const fadeUp = (delay = 0) => ({
+    initial: { opacity: 0, y: 18 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.4, ease: 'easeOut' as const, delay },
+});
+
 export default function ArtistProfilePage() {
     const params = useParams<{ id: string }>();
     const router = useRouter();
@@ -64,7 +70,6 @@ export default function ArtistProfilePage() {
     const tracks = tracksPage?.items || [];
 
     const handlePlay = (trackId: number) => {
-        // Already loaded — toggle pause/resume instead of restarting from 0.
         if (currentTrack?.id === trackId) {
             toggle();
             return;
@@ -92,40 +97,37 @@ export default function ArtistProfilePage() {
 
     return (
         <div className="p-8 lg:p-12 max-w-[1200px] mx-auto space-y-10 pb-32">
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+
+            {/* Back button */}
+            <motion.div {...fadeUp(0)}>
                 <button
                     onClick={() => router.push('/explore')}
-                    className="flex items-center gap-2 text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors mb-8"
+                    className="flex items-center gap-2 text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"
                 >
                     <ArrowLeft className="size-4" />
                     Back to Explore
                 </button>
+            </motion.div>
 
-                {/* Hero */}
-                <div className="flex flex-col md:flex-row gap-8 items-start md:items-end">
-                    <div className="relative size-40 md:size-48 rounded-full overflow-hidden shrink-0 shadow-2xl ring-2 ring-primary/20 border-2 border-white/5">
-                        <img src={artist.profile_picture || FALLBACK_AVATAR} className="size-full object-cover" alt={artist.stage_name} />
+            {/* Hero */}
+            <motion.div {...fadeUp(0.07)} className="flex flex-col md:flex-row gap-8 items-start md:items-end">
+                <div className="relative size-40 md:size-48 rounded-full overflow-hidden shrink-0 shadow-2xl ring-2 ring-primary/20 border-2 border-white/5">
+                    <img src={artist.profile_picture || FALLBACK_AVATAR} className="size-full object-cover" alt={artist.stage_name} />
+                </div>
+                <div className="space-y-3 flex-1">
+                    <p className="text-primary font-black tracking-[0.2em] text-[10px] uppercase">Artist Profile</p>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white">{artist.stage_name}</h1>
+                        {artist.is_verified && <BadgeCheck className="size-7 text-primary shrink-0" />}
                     </div>
-                    <div className="space-y-3 flex-1">
-                        <p className="text-primary font-black tracking-[0.2em] text-[10px] uppercase">Artist Profile</p>
-                        <div className="flex items-center gap-3">
-                            <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white">{artist.stage_name}</h1>
-                            {artist.is_verified && <BadgeCheck className="size-7 text-primary shrink-0" />}
-                        </div>
-                        {artist.bio && (
-                            <p className="text-slate-400 max-w-xl text-sm font-medium leading-relaxed">{artist.bio}</p>
-                        )}
-                    </div>
+                    {artist.bio && (
+                        <p className="text-slate-400 max-w-xl text-sm font-medium leading-relaxed">{artist.bio}</p>
+                    )}
                 </div>
             </motion.div>
 
             {/* Stats */}
-            <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="grid grid-cols-3 gap-4"
-            >
+            <motion.div {...fadeUp(0.14)} className="grid grid-cols-3 gap-4">
                 {stats.map((stat) => (
                     <div key={stat.label} className="card-premium p-6 space-y-2">
                         <div className="flex items-center gap-2 text-slate-500">
@@ -138,12 +140,7 @@ export default function ArtistProfilePage() {
             </motion.div>
 
             {/* Tracks */}
-            <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="space-y-4"
-            >
+            <motion.div {...fadeUp(0.21)} className="space-y-4">
                 <h2 className="text-xl font-black text-white">Released Tracks</h2>
 
                 {tracksLoading ? (
@@ -161,15 +158,21 @@ export default function ArtistProfilePage() {
                     </div>
                 ) : (
                     <div className="flex flex-col gap-3">
-                        {tracks.map((track) => {
+                        {tracks.map((track, i) => {
                             const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
                             return (
-                                <div key={track.id} className="card-premium p-4 pr-6 flex items-center justify-between gap-4">
+                                <motion.div
+                                    key={track.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.3, ease: 'easeOut' as const, delay: 0.25 + i * 0.05 }}
+                                    className="card-premium p-4 pr-6 flex items-center justify-between gap-4"
+                                >
                                     <div className="flex items-center gap-4 min-w-0">
                                         <button
                                             onClick={() => handlePlay(track.id)}
                                             disabled={!track.file_url}
-                                            className="size-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors shrink-0 disabled:opacity-40"
+                                            className="size-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary/20 active:scale-95 transition-all shrink-0 disabled:opacity-40"
                                         >
                                             {isCurrentlyPlaying ? <Pause className="size-4 fill-current" /> : <Play className="size-4 fill-current" />}
                                         </button>
@@ -183,7 +186,7 @@ export default function ArtistProfilePage() {
                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">
                                         {formatNumber(track.stream_count)} streams
                                     </span>
-                                </div>
+                                </motion.div>
                             );
                         })}
                     </div>

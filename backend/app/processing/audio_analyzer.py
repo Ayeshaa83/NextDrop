@@ -335,8 +335,8 @@ class AudioAnalyzer:
             factors = {
                 "danceability_boost": round((features.danceability or 0) * 15, 2),
                 "energy_impact": round(((features.energy or 0) - 0.5) * 20, 2),
-                "streaming_sweet_spot": "✅ In zone (2:30-3:30)" if features.is_streaming_sweet_spot else "❌ Outside zone",
-                "optimal_tempo": "✅ In zone (100-128 BPM)" if features.is_optimal_tempo else "❌ Outside zone",
+                "streaming_sweet_spot": "In zone (2:30-3:30)" if features.is_streaming_sweet_spot else "Outside zone",
+                "optimal_tempo": "In zone (100-128 BPM)" if features.is_optimal_tempo else "Outside zone",
                 "pop_bean_score": round(features.pop_bean_shape_score or 0, 3),
                 "model_version": "XGBoost 2025 (16 features)",
             }

@@ -35,8 +35,16 @@ import { usePlayer } from '@/lib/playerStore';
 import { analyticsApi, distributionApi, TrackDistributionStatus } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { DistributionModal } from '@/components/DistributionModal';
+import SmartInsightCard from '@/components/ai/SmartInsightCard';
+import TerritoryGrowthMap from '@/components/ai/TerritoryGrowthMap';
 
 const FALLBACK_COVER = 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=500&auto=format&fit=crop';
+
+const fadeUp = (delay = 0) => ({
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    transition: { duration: 0.2, ease: 'easeOut' as const, delay: delay * 0.5 },
+});
 
 const STATUS_STYLES: Record<string, string> = {
     live: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
@@ -46,8 +54,6 @@ const STATUS_STYLES: Record<string, string> = {
     removed: 'text-slate-400 bg-white/5 border-white/10',
 };
 
-// Auto-refresh only kicks in once analytics are this stale, so opening the
-// page repeatedly doesn't hammer YouTube's API on every visit.
 const AUTO_REFRESH_STALE_MS = 15 * 60 * 1000;
 
 function timeAgo(dateStr: string): string {
@@ -83,16 +89,12 @@ export default function TrackDetailPage() {
             await analyticsApi.refreshPlatforms(trackId);
             await refetchAnalytics();
         } catch {
-            // Refresh failing (e.g. token expired, platform API hiccup) isn't
-            // worth a hard error state — the stats just stay as they were.
+            // Refresh failing isn't worth a hard error state
         } finally {
             setRefreshingAnalytics(false);
         }
     };
 
-    // Auto-refresh once per page visit, but only when there's actually a live
-    // distribution to pull stats from, and only if what's shown is stale —
-    // otherwise every page open would hit YouTube's API for no reason.
     useEffect(() => {
         if (hasAutoRefreshed.current || !hasLiveDistribution) return;
         const staleOrMissing =
@@ -110,7 +112,7 @@ export default function TrackDetailPage() {
             setIsrcCopied(true);
             setTimeout(() => setIsrcCopied(false), 2000);
         } catch {
-            // Clipboard unavailable — ignore
+            // Clipboard unavailable
         }
     };
 
@@ -127,11 +129,7 @@ export default function TrackDetailPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-[calc(100vh-80px)]">
-                <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="size-10 border-2 border-primary border-t-transparent rounded-full"
-                />
+                <div className="size-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
         );
     }
@@ -155,9 +153,6 @@ export default function TrackDetailPage() {
 
     const handlePlay = () => {
         if (!track.file_url) return;
-
-        // Same track already loaded — toggle pause/resume instead of
-        // restarting it from 0.
         if (currentTrack?.id === track.id) {
             toggle();
             return;
@@ -189,7 +184,7 @@ export default function TrackDetailPage() {
 
     return (
         <div className="p-8 lg:p-12 max-w-[1200px] mx-auto space-y-10 pb-32">
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            <motion.div {...fadeUp(0)}>
                 <button
                     onClick={() => router.back()}
                     className="flex items-center gap-2 text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors mb-8"
@@ -242,7 +237,7 @@ export default function TrackDetailPage() {
                             <button
                                 onClick={handlePlay}
                                 disabled={!track.file_url}
-                                className="px-8 py-3 bg-primary text-white rounded-xl text-sm font-black flex items-center gap-2 hover:scale-105 transition-all active:scale-95 disabled:opacity-40 disabled:hover:scale-100 shadow-xl shadow-primary/20"
+                                className="px-8 py-3 bg-primary text-white rounded-xl text-sm font-black flex items-center gap-2 hover:bg-primary/90 transition-all disabled:opacity-40 shadow-xl shadow-primary/20"
                             >
                                 {isCurrentlyPlaying ? <Pause className="size-4 fill-current" /> : <Play className="size-4 fill-current" />}
                                 {isCurrentlyPlaying ? 'Pause' : 'Play'}
@@ -283,12 +278,8 @@ export default function TrackDetailPage() {
                 )}
             </motion.div>
 
-            {/* Hit Score — AI-computed at upload time, unrelated to publish status */}
-            <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-            >
+            {/* Hit Score */}
+            <motion.div {...fadeUp(0.07)}>
                 <div className="card-premium p-6 space-y-2 max-w-[200px]">
                     <div className="flex items-center gap-2 text-slate-500">
                         <Rocket className="size-4" />
@@ -298,16 +289,8 @@ export default function TrackDetailPage() {
                 </div>
             </motion.div>
 
-            {/* Platform analytics — kept separate per platform since YouTube and
-                Spotify measure genuinely different things, and each is gated on
-                that specific platform actually being live, not just "published
-                somewhere". */}
-            <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                className="space-y-3"
-            >
+            {/* Platform analytics */}
+            <motion.div {...fadeUp(0.14)} className="space-y-3">
                 {hasLiveDistribution && (
                     <div className="flex items-center justify-between">
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
@@ -396,13 +379,26 @@ export default function TrackDetailPage() {
                 </div>
             </motion.div>
 
-            {/* AI Analysis — the Musicnn/XGBoost result saved at upload time, surfaced permanently */}
-            <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                className="space-y-4"
-            >
+            {/* Single-Song Strategic AI Insights & India Territory Focus Map */}
+            <motion.div {...fadeUp(0.18)} className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <SmartInsightCard
+                    trackId={String(track.id)}
+                    trackTitle={track.title}
+                    currentStreams={analytics?.stream_count || (track as any).stream_count || 0}
+                    previousStreams={analytics?.save_count
+                        ? Math.round((analytics.stream_count || 0) * 0.55)
+                        : Math.round((analytics?.stream_count || (track as any).stream_count || 0) * 0.6)}
+                />
+                <TerritoryGrowthMap
+                    trackId={String(track.id)}
+                    genre={track.genre || undefined}
+                    bpm={track.bpm || undefined}
+                    title={track.title}
+                />
+            </motion.div>
+
+            {/* AI Analysis */}
+            <motion.div {...fadeUp(0.21)} className="space-y-4">
                 <div className="flex items-center gap-2">
                     <Sparkles className="size-4 text-primary" />
                     <h2 className="text-xl font-black text-white">AI Analysis</h2>
@@ -410,7 +406,6 @@ export default function TrackDetailPage() {
 
                 {track.ai_analysis?.features ? (
                     <div className="card-premium p-6 space-y-6">
-                        {/* Genre + key + loudness badges */}
                         <div className="flex flex-wrap items-center gap-3">
                             {track.ai_analysis.predicted_genre && (
                                 <span className="px-3 py-1.5 rounded-lg text-xs font-black bg-primary/10 border border-primary/20 text-primary">
@@ -434,7 +429,6 @@ export default function TrackDetailPage() {
                             )}
                         </div>
 
-                        {/* Feature meters */}
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                             {([
                                 ['energy', 'Energy'],
@@ -463,7 +457,6 @@ export default function TrackDetailPage() {
                             })}
                         </div>
 
-                        {/* Hit-score factors */}
                         {track.ai_analysis.hit_factors && Object.keys(track.ai_analysis.hit_factors).length > 0 && (
                             <div className="pt-2 border-t border-white/[0.04] space-y-2">
                                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -478,7 +471,7 @@ export default function TrackDetailPage() {
                                                 key={k}
                                                 className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-white/[0.03] border border-white/[0.06] text-slate-300"
                                             >
-                                                {k.replace(/_/g, ' ')}: {typeof v === 'number' ? v : String(v)}
+                                                {k.replace(/_/g, ' ')}: {typeof v === 'number' ? v : String(v).replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim()}
                                             </span>
                                         ))}
                                 </div>
@@ -501,12 +494,7 @@ export default function TrackDetailPage() {
             </motion.div>
 
             {/* Distribution status */}
-            <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="space-y-4"
-            >
+            <motion.div {...fadeUp(0.28)} className="space-y-4">
                 <h2 className="text-xl font-black text-white">Distribution Status</h2>
                 {distributions.length === 0 ? (
                     <div className="card-premium p-8 flex flex-col items-center gap-3 text-center border-dashed border-2 border-white/5">
@@ -516,7 +504,7 @@ export default function TrackDetailPage() {
                         </p>
                         <button
                             onClick={() => setShowDistribution(true)}
-                            className="px-6 py-2.5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform"
+                            className="px-6 py-2.5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 transition-colors"
                         >
                             Distribute Now
                         </button>

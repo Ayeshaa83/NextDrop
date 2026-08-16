@@ -111,7 +111,9 @@ def get_collab_unread_count(
     current_user: User = Depends(deps.get_current_active_user),
 ):
     """Total unread chat messages across all my collaborations — for the Sidebar badge."""
-    artist = get_current_artist(db, current_user)
+    artist = artist_crud.get_artist_by_user_id(db, user_id=current_user.id)
+    if not artist:
+        return {"unread_count": 0}
     count = social_crud.get_unread_message_count_for_artist(db, artist_id=artist.id, user_id=current_user.id)
     return {"unread_count": count}
 

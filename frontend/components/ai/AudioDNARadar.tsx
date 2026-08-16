@@ -237,8 +237,8 @@ export default function AudioDNARadar({ trackId, trackTitle = 'Neon Drive', clas
                     </div>
 
                     {/* Radar Chart */}
-                    <div className="py-2">
-                        <ResponsiveContainer width="100%" height={320}>
+                    <div className="py-2 min-w-0">
+                        <ResponsiveContainer width="100%" height={320} minWidth={0} minHeight={0}>
                             <RadarChart data={filteredData} cx="50%" cy="50%" outerRadius="75%">
                                 <PolarGrid stroke="rgba(255,255,255,0.04)" strokeDasharray="2 4" />
                                 <PolarAngleAxis

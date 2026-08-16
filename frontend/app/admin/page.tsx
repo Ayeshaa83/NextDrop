@@ -39,8 +39,8 @@ export default function AdminDashboard() {
                     Platform Growth (30 days)
                 </h2>
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    <div className="lg:col-span-3 h-[220px] -ml-4">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="lg:col-span-3 -ml-4 min-w-0">
+                        <ResponsiveContainer width="100%" height={220}>
                             <AreaChart data={platformAnalytics?.points || []}>
                                 <defs>
                                     <linearGradient id="adminSignups" x1="0" y1="0" x2="0" y2="1">

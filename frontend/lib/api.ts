@@ -309,8 +309,8 @@ export const authApi = {
 // ============ ARTIST API ============
 
 export const artistApi = {
-  async getMyProfile(): Promise<Artist> {
-    return apiFetch<Artist>('/api/v1/artists/me');
+  async getMyProfile(): Promise<Artist | null> {
+    return apiFetch<Artist | null>('/api/v1/artists/me');
   },
 
   async createProfile(data: { stage_name: string; bio?: string; profile_picture?: string }): Promise<Artist> {
