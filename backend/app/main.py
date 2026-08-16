@@ -48,11 +48,14 @@ origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
+    "http://f4ko0gg08wgo00wg08gow0ww.78.46.171.125.sslip.io",
+    frontend_url,
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https?://.*",  # Dynamically allows any http/https origin with credentials
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
