@@ -19,16 +19,7 @@ from app.sec.rate_limiter import limiter  # noqa: imported here for app.state bi
 
 from app.api.ai_features import router as ai_router
 
-# ── Rate Limiter ─────────────────────────────────────────────────────────────
-# limiter singleton is defined in app.sec.rate_limiter to avoid circular imports
 
-# NOTE: there is deliberately no background scheduler here. A fixed "refresh
-# every N minutes" job doesn't scale — YouTube's Data API v3 caps usage at a
-# daily quota (commonly 10,000 units/day; videos.list costs 1 unit/call), so
-# a job refreshing every live video on a fixed interval would grow with the
-# catalog and eventually exceed it. Analytics refresh is manual-only for now
-# (the "Refresh Analytics" button, plus an on-page-visit check capped at once
-# per 15 minutes) — revisit with quota-aware batching once deployed for real.
 
 app = FastAPI(
     title="NextDrop API",
@@ -42,6 +33,8 @@ app.add_middleware(SlowAPIMiddleware)
 
 # Custom ML engines router (metadata/insights/territory/release timing)
 app.include_router(ai_router, prefix="/api")
+
+frontend_url = os.getenv("SERVICE_URL_FRONTEND") or os.getenv("FRONTEND_URL") or "http://f4ko0gg08wgo00wg08gow0ww.78.46.171.125.sslip.io"
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 origins = [
